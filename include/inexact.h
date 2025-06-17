@@ -109,8 +109,8 @@ public:
         }
         CGAL::Comparison_result operator()(const Point_2& p, const Line_2& l) const {
             T val = l.eval(p.a);
-            if(val < p.b) return CGAL::SMALLER;
-            if(val > p.b) return CGAL::LARGER;
+            if(val < p.b) return CGAL::LARGER;
+            if(val > p.b) return CGAL::SMALLER;
             else return CGAL::EQUAL;
         }
     };
