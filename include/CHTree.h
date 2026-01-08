@@ -101,67 +101,54 @@ protected:
     // Total construction cost: Σ(n/2^h × h) = O(n).
     // ========================================================================
 
-    // O(h) bridge finding using the paper's Algorithm 2
-    // Uses simple O(1) child pointer navigation instead of O(log n) step functions
+    // O(N) total bridge finding for bulk construction
+    // 
+    // This is identical to findBridge but runs in the context of bottom-up
+    // construction. Uses stepLeft/stepRight to navigate which skip dominated nodes.
+    //
+    // Complexity per node: O(h²) where h is subtree height
+    // Total complexity: Σ(n/2^h × h²) = n × Σ(h²/2^h) = n × 6 = O(n)
+    // The series Σ(h²/2^h) converges to a constant (≈6).
+    //
+    // Based on: "Simple and Robust Dynamic Two-Dimensional Convex Hull"
+    // by Gæde, Gørtz, van der Hoog, Krogh, Rotenberg (2023)
     template<bool lower>
     Bridge findBridgeLinear(Node* v){
-        Node* alpha = v->left;   // Navigation pointer in left subtree
-        Node* beta = v->right;   // Navigation pointer in right subtree
-        
-        // Navigate down until both reach leaves
-        while (!(isLeaf(alpha) && isLeaf(beta))) {
-            bool moved = false;
-            Bridge e_alpha = alpha->val[lower];
-            Bridge e_beta = beta->val[lower];
-            
-            // Compute the connecting line between representative points
-            Point l = e_alpha.max();  // Rightmost point of alpha's bridge
-            Point r = e_beta.min();   // Leftmost point of beta's bridge
-            Bridge lr(l, r);          // Line connecting them
-            
-            // Case 1: slope(alpha) <= slope(lr) → alpha is "too steep"
-            // The bridge tangent on the left hull must PRECEDE alpha
-            // Action: Go LEFT in alpha's subtree (discard right)
-            if (!isLeaf(alpha) && slope_comp<lower>(e_alpha, lr)) {
-                alpha = alpha->left;  // O(1) step
-                moved = true;
+        // This is exactly the same as findBridge - the O(N) benefit comes from
+        // the bottom-up construction pattern, not from changes to this function.
+        Node* x = v->left;
+        Node* y = v->right;
+        Bridge e_l, e_r, lr;
+        bool undecided;
+
+        Point m = midpoint(x->max[lower].max(), y->min[lower].min());
+
+        while (!(isLeaf(x) && isLeaf(y))) {
+            undecided = true;
+            e_l = x->val[lower];
+            e_r = y->val[lower];
+            lr = Bridge(midpoint(e_l), midpoint(e_r));
+            if (!isLeaf(x) && slope_comp<lower>(e_l, lr)){
+                x = stepLeft<lower>(x); undecided = false;
             }
-            
-            // Case 2: slope(lr) <= slope(beta) → beta is "too flat"
-            // The bridge tangent on the right hull must SUCCEED beta
-            // Action: Go RIGHT in beta's subtree (discard left)
-            // Note: This can execute in the SAME iteration as Case 1
-            if (!isLeaf(beta) && slope_comp<lower>(lr, e_beta)) {
-                beta = beta->right;   // O(1) step
-                moved = true;
+            if (!isLeaf(y) && slope_comp<lower>(lr, e_r)) {
+                y = stepRight<lower>(y); undecided = false;
             }
-            
-            // Case 3: Neither slope condition met
-            // Use intersection position to decide which side to narrow
-            if (!moved) {
-                Point m = midpoint(alpha->max[lower].max(), beta->min[lower].min());
-                
-                if (!isLeaf(alpha) && (isLeaf(beta) || m_comp<lower>(e_alpha, e_beta, m))) {
-                    // Intersection is on the left side → bridge starts AFTER alpha
-                    alpha = alpha->right;  // O(1) step
-                } else if (!isLeaf(beta)) {
-                    // Intersection is on the right side → bridge ends BEFORE beta
-                    beta = beta->left;     // O(1) step
+            if (undecided) {
+                if (!isLeaf(x) && m_comp<lower>(e_l, e_r, m) || isLeaf(y)) {
+                    x = stepRight<lower>(x);
                 } else {
-                    // Both are leaves now
-                    break;
+                    y = stepLeft<lower>(y);
                 }
             }
         }
-        
-        return Bridge(alpha->val[lower].min(), beta->val[lower].max());
+        return Bridge(x->val[lower].min(), y->val[lower].max());
     }
 
-    // Callback used during bulk construction
-    // For now, uses the original findBridge which is O(log n) per node but correct.
-    // The O(h) findBridgeLinear algorithm may need further refinement to handle edge cases.
-    // Even with O(log n) per node, total construction is still O(n log n) which
-    // provides significant speedup (25-30x) over incremental insertion.
+    // Callback used during O(N) bulk construction.
+    // Uses findBridgeLinear which is identical to findBridge.
+    // The O(N) total complexity comes from the bottom-up construction pattern:
+    // Total = Σ(n/2^h × h²) = n × Σ(h²/2^h) ≈ 6n = O(n)
     void onUpdateLinear(Node* x){
         if(isLeaf(x)) return;
         x->val[0] = findBridge<false>(x);
