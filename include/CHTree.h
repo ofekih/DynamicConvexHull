@@ -364,6 +364,111 @@ public:
         return hullPoints<true>();
     }
 
+    // ========================================================================
+    // Hull Query Helpers for StabbingLineStructure
+    // ========================================================================
+
+    // Get the x-coordinate range of all points in the hull.
+    // Returns {min_x, max_x}. For empty hulls, returns {+inf, -inf}.
+    std::pair<double, double> getXRange() const {
+        if (!AVLTree<Bridges<Traits>>::root) {
+            return {std::numeric_limits<double>::infinity(), 
+                    -std::numeric_limits<double>::infinity()};
+        }
+        return {AVLTree<Bridges<Traits>>::root->min[0].min().x(),
+                AVLTree<Bridges<Traits>>::root->max[0].max().x()};
+    }
+
+    // Evaluate the y-value of the hull at x-coordinate x.
+    // For lower=true (lower hull), returns the y on the lower boundary.
+    // For lower=false (upper hull), returns the y on the upper boundary.
+    // Requires: x is within the hull's x-range.
+    // Time complexity: O(log n)
+    template<bool lower>
+    double evaluateHullAt(double x) const {
+        auto current = AVLTree<Bridges<Traits>>::root;
+        if (!current) return lower ? std::numeric_limits<double>::infinity() 
+                                   : -std::numeric_limits<double>::infinity();
+        
+        // Find the bridge whose x-range contains x
+        // Note: Using inline leaf check instead of isLeaf macro for const correctness
+        while (current && (current->left || current->right)) {
+            const Bridge& bridge = current->val[lower];
+            double minX = bridge.min().x();
+            double maxX = bridge.max().x();
+            
+            if (x >= minX && x <= maxX) {
+                // x is within this bridge - evaluate the line
+                if (bridge.is_vertical()) {
+                    // Vertical segment - return the appropriate endpoint
+                    return lower ? bridge.min().y() : bridge.max().y();
+                }
+                // Evaluate y = y0 + slope * (x - x0)
+                double dx = maxX - minX;
+                if (std::abs(dx) < 1e-15) return bridge.min().y();
+                double dy = bridge.max().y() - bridge.min().y();
+                double slope = dy / dx;
+                return bridge.min().y() + slope * (x - minX);
+            } else if (x < minX) {
+                current = current->left;
+            } else {
+                current = current->right;
+            }
+        }
+        
+        // Reached a leaf - check if x matches
+        if (current) {
+            return current->val[lower].min().y();
+        }
+        return lower ? std::numeric_limits<double>::infinity() 
+                     : -std::numeric_limits<double>::infinity();
+    }
+
+    // Get the slope of the hull edge at x-coordinate x.
+    // For lower=true (lower hull), returns the slope of the lower boundary.
+    // For lower=false (upper hull), returns the slope of the upper boundary.
+    // Requires: x is within the hull's x-range.
+    // Time complexity: O(log n)
+    template<bool lower>
+    double getHullSlope(double x) const {
+        auto current = AVLTree<Bridges<Traits>>::root;
+        if (!current) return 0.0;
+        
+        // Find the bridge whose x-range contains x
+        // Note: Using inline leaf check instead of isLeaf macro for const correctness
+        while (current && (current->left || current->right)) {
+            const Bridge& bridge = current->val[lower];
+            double minX = bridge.min().x();
+            double maxX = bridge.max().x();
+            
+            if (x >= minX && x <= maxX) {
+                // x is within this bridge - return its slope
+                if (bridge.is_vertical()) {
+                    // Vertical segment has undefined/infinite slope
+                    return lower ? -std::numeric_limits<double>::infinity()
+                                 : std::numeric_limits<double>::infinity();
+                }
+                double dx = maxX - minX;
+                if (std::abs(dx) < 1e-15) return 0.0;
+                double dy = bridge.max().y() - bridge.min().y();
+                return dy / dx;
+            } else if (x < minX) {
+                current = current->left;
+            } else {
+                current = current->right;
+            }
+        }
+        
+        // Reached a leaf - slope is 0 (point)
+        return 0.0;
+    }
+
+    // Public wrappers for evaluateHullAt and getHullSlope
+    double evaluateLowerHullAt(double x) const { return evaluateHullAt<true>(x); }
+    double evaluateUpperHullAt(double x) const { return evaluateHullAt<false>(x); }
+    double getLowerHullSlope(double x) const { return getHullSlope<true>(x); }
+    double getUpperHullSlope(double x) const { return getHullSlope<false>(x); }
+
     // Build the convex hull from a sorted vector of points in O(n) time.
     // Points MUST be sorted by x-coordinate (and by y for ties).
     // This replaces any existing hull content.
