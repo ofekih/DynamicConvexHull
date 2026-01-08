@@ -22,9 +22,9 @@ using Midpoint = typename Traits::Construct_midpoint_2;
 using Compare_slope = typename Traits::Compare_slope_2;
 using Compare_at_x = typename Traits::Compare_y_at_x_2;
 
-const Midpoint midpoint = Midpoint();
-const Compare_slope compare_slope = Compare_slope();
-const Compare_at_x compare_at_x = Compare_at_x();
+    Midpoint midpoint = Midpoint();
+    Compare_slope compare_slope = Compare_slope();
+    Compare_at_x compare_at_x = Compare_at_x();
 
 protected:
     template<bool lower>

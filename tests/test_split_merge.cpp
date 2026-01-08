@@ -864,3 +864,113 @@ TEST(SplitMerge, OperationsAfterJoin) {
     
     EXPECT_TRUE(verifyHullCorrectness(left, allPoints));
 }
+
+TEST(SplitMerge, RandomizedPartitionStressTest) {
+    std::mt19937 rng(12345);
+    // Use a moderate number of points to keep test duration reasonable
+    const int NUM_POINTS = 500; 
+    const int NUM_ITERATIONS = 500;
+    const int RANGE = 10000;
+    
+    auto points = generateSortedRandomPoints(rng, NUM_POINTS, RANGE);
+    
+    // Maintain a list of partitions. 
+    // They are implicitly sorted by x-range because we only split and join adjacent ones.
+    std::vector<std::unique_ptr<CHTree<K>>> partitions;
+    
+    // Start with one big partition
+    auto initialHull = std::make_unique<CHTree<K>>();
+    initialHull->build(points);
+    partitions.push_back(std::move(initialHull));
+    
+    std::uniform_real_distribution<double> actionDist(0.0, 1.0);
+    
+    for (int i = 0; i < NUM_ITERATIONS; ++i) {
+        // Probability of split vs join
+        // Bias towards split if we have few partitions, join if we have many
+        double joinProb = (double)partitions.size() / 20.0; // scales up as partitions grow
+        if (joinProb > 0.8) joinProb = 0.8;
+        if (partitions.size() < 2) joinProb = 0.0;
+        
+        bool doJoin = actionDist(rng) < joinProb;
+        
+        if (doJoin) {
+            // JOIN OPERATION
+            // Pick a random adjacent pair
+            std::uniform_int_distribution<size_t> idxDist(0, partitions.size() - 2);
+            size_t idx = idxDist(rng);
+            
+            // Join idx+1 into idx
+            partitions[idx]->join(*partitions[idx+1]);
+            
+            // Remove the empty shell of idx+1
+            partitions.erase(partitions.begin() + idx + 1);
+            
+        } else {
+            // SPLIT OPERATION
+            // Pick a random partition
+            std::uniform_int_distribution<size_t> idxDist(0, partitions.size() - 1);
+            size_t idx = idxDist(rng);
+            
+            CHTree<K>& hull = *partitions[idx];
+            
+            if (hull.size() < 2) continue; // Can't split much further
+            
+            // Find min and max x of this hull to choose a split point
+            auto pts = hull.upperHullPoints(); // Just need x range
+            if (pts.empty()) continue;
+            
+            double minX = pts.front().x();
+            double maxX = pts.back().x();
+            
+            if (maxX - minX < 1.0) continue; // Too narrow
+            
+            std::uniform_real_distribution<double> splitDist(minX + 0.1, maxX - 0.1);
+            double splitX = splitDist(rng);
+            
+            auto rightParams = hull.split(splitX);
+            auto rightHull = std::make_unique<CHTree<K>>();
+            // split method returns by value, we need to move it into heap object
+            *rightHull = std::move(rightParams);
+            
+            // Insert right hull after the current one
+            partitions.insert(partitions.begin() + idx + 1, std::move(rightHull));
+        }
+        
+        // --- VERIFICATION ---
+        
+        // 1. Total size check
+        size_t currentTotal = 0;
+        for (const auto& p : partitions) currentTotal += p->size();
+        ASSERT_EQ(currentTotal, NUM_POINTS) << "Total points mismatch at iteration " << i;
+        
+        // 2. Local Invariant Check (every 10 iterations)
+        if (i % 10 == 0) {
+            for (const auto& p : partitions) {
+                 ASSERT_TRUE(p->validateBridges()) << "Bridge validation failed at iter " << i;
+            }
+        }
+        
+        // 3. Global Invariant Check (every 50 iterations)
+        // Verify partitions are sorted and disjoint
+        if (i % 50 == 0) {
+             double lastMaxX = -std::numeric_limits<double>::infinity();
+             for(const auto& p : partitions) {
+                 if (p->empty()) continue;
+                 auto uh = p->upperHullPoints();
+                 if (uh.empty()) continue;
+                 
+                 double minX = uh.front().x();
+                 double maxX = uh.back().x();
+                 
+                 ASSERT_LE(minX, maxX);
+                 // Relaxed check: just ensure non-decreasing start points or strictly increasing "zones"
+                 // Since we split at strict double X, the sets should be disjoint.
+                 // However, points might lie exactly on split boundary? split() uses < splitX for left.
+                 // So left max < splitX <= right min.
+                 ASSERT_LT(lastMaxX, minX) << "Partitions not sorted or overlapping at iter " << i;
+                 lastMaxX = maxX;
+             }
+        }
+    }
+}
