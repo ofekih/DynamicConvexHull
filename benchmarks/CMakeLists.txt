@@ -1,0 +1,2 @@
+add_executable(benchmark_convex_hull benchmark_convex_hull.cpp)
+target_link_libraries(benchmark_convex_hull PRIVATE dch_lib benchmark::benchmark_main)

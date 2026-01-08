@@ -1,5 +1,7 @@
-# Prerequisites
-*.d
+# Build directory
+build/
+bin/
+lib/
 
 # Compiled Object files
 *.slo
@@ -16,10 +18,6 @@
 *.dylib
 *.dll
 
-# Fortran module files
-*.mod
-*.smod
-
 # Compiled Static libraries
 *.lai
 *.la
@@ -30,3 +28,27 @@
 *.exe
 *.out
 *.app
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Data files (optional, but often large/generated)
+*.data
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+
