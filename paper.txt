@@ -1,0 +1,1564 @@
+Simple and Robust Dynamic Two-Dimensional Convex Hull
+Emil Toftegaard Gæde∗
+
+Ivor van der Hoog �∗
+Inge Li Gørtz � ∗
+Eva Rotenberg � ∗
+
+arXiv:2310.18068v2 [cs.CG] 31 Oct 2023
+
+Abstract
+The convex hull of a data set P is the smallest convex set
+that contains P . A dynamic data set is one where points
+are inserted and deleted. In this work, we present a new
+data structure for convex hull, that allows for efficient
+dynamic updates, in theory and practice.
+In a dynamic convex hull implementation, the following traits are desirable: (1) algorithms for efficiently
+answering queries as to whether a specified point is inside or outside the hull, (2) adhering to geometric robustness, and (3) algorithmic simplicity.
+Furthermore, a specific but well-motivated type of
+two-dimensional data is rank-based data. Here, the
+input is a set of real-valued numbers Y where for any
+number y ∈ Y its rank is its index in Y ’s sorted
+order. Each value in Y can be mapped to a point
+(rank, value) to obtain a two-dimensional point set.
+Note that for a single update, a linear number of
+(rank, value)-pairs may change; posing a challenge
+for dynamic algorithms. It is desirable for a dynamic
+convex hull implementation to also (4) accommodate
+rank-based data.
+In this work, we give an efficient, geometrically robust, dynamic convex hull algorithm, that facilitates
+queries to whether a point is internal. Furthermore,
+our construction can be used to efficiently update the
+convex hull of rank-ordered data, when the real-valued
+point set is subject to insertions and deletions. Our improved solution is based on an algorithmic simplification
+of the classical convex hull data structure by Overmars
+and van Leeuwen [STOC’80], combined with new algorithmic insights.
+Our theoretical guarantees on the update time
+match those of Overmars and van Leeuwen, namely
+O(log2 |P |), while we allow a wider range of functionalities (including rank-based data). Our algorithmic simplification includes simplifying an 11-case check down
+to a 3-case check that can be written in 20 lines of easily readable C-code. We extend our solution to provide a trade-off between theoretical guarantees and the
+practical performance of our algorithm. We test and
+compare our solutions extensively on inputs that were
+∗ Technical University of Denmark, Kongens Lyngby, Denmark
+
+Christoffer Krogh∗
+
+generated randomly or adversarially, including benchmarking datasets from the literature.
+Acknowledgements. This research was supported by Independent Research Fund Denmark grant
+2020-2023 (9131-00044B) “Dynamic Network Analysis”
+and Eva Rotenberg’s Carlsberg Foundation Young Researcher Fellowship CF21-0302 - “Graph Algorithms
+with Geometric Applications”. This project has additionally received funding from the European Union’s
+Horizon 2020 research and innovation programme under the Marie Sklodowska-Curie grant agreement No
+899987.
+1
+
+Introduction
+
+In analysis of spatial data, computing the convex hull
+yields one of the most fundamental characteristics of
+the data set. The convex hull itself serves as a computational stepping stone towards promptly answering
+relevant queries as they arrive online. Seen from the
+static perspective, the problem of computing the convex hull has received much attention. In this paper,
+we study the dynamic setting, where data points may
+arbitrarily be added, deleted, or altered. Convex hulls
+have many applications for evolving or changing data
+sets, illustrating the need for an efficient, practical, and
+publicly available dynamic convex hull implementation.
+Problem statement. The convex hull CH(P ) of
+a point set P is the minimal convex shape that contains all points in P . Convex hulls are one of the
+most prominent studied objects in computational geometry [9] due to their many applications which include
+top-queries [28, 37], clustering [33, 25, 44], road network
+analysis [34, 47, 25], and data pruning/dimension reduction [26, 38, 30, 35]. A convex hull data structure can
+store CH(P ) either explicitly or implicitly. An explicit
+data structure stores the vertices (or edges) of the hull,
+in their cyclical ordering, as a balanced binary tree.
+An implicit convex hull data structure supports
+(a subset of) common convex hull queries without
+maintaining the edges of the convex hull. The points
+of P that lie on the convex hull of P are called the
+extreme points of P . An implicit data structure stores
+a data structure on P that can answer queries on the
+convex hull such as [13]:
+
+1. Finding the extreme point of P in a query direction,
+2. Deciding whether a line intersects CH(P ),
+3. Finding the two hull vertices tangent to a query,
+4. Deciding whether a query point q lies in CH(P ),
+5. Finding the intersection with a query line,
+6. Finding the intersection between two hulls.
+We briefly note that with any explicit convex hull
+(storing h points) one can answer each of these queries
+in O(log h) time. We wish to dynamically maintain a
+convex hull supporting these queries subject to point
+insertions and deletions.
+Related work. In the static setting, where the
+data set does not change, computing an explicit convex
+hull of a set of n points can be done in optimal O(n log n)
+time, e.g., with Graham’s scan [27] or Andrew’s vertical
+sweep line [2], or with the QuickHull O(n log n) expected
+time algorithm [5]. Crucially, Graham’s scan takes O(n)
+time if the point set is already sorted by their radial
+ordering. There also exist static, theoretically optimal,
+output-sensitive algorithms, due to Kirkpatrick and
+Seidel [31] and later Chan [11]: They obtain O(n log h)
+running time where h denotes the number of points of
+P that lie on the convex hull. In a dynamic setting, the
+only data structure to explicitly maintain the convex
+hull is the O(log2 n) algorithm by Overmars and van
+Leeuwen [40]. This is also the best explicit dynamic
+convex hull algorithm with worst-case updates.
+The first dynamic implicit data structure for the
+convex hull is by Chan [12], who achieves a linear-size
+data structure with O(log1+ε n) amortized update time,
+and supports queries 1–3 in O(log n) time (here, ε > 0 is
+some arbitrarily small constant). The update time was
+improved by Brodal and Jacob [9] to O(log n log log n)
+amortized. The original work by Chan [12] can answer
+queries 4–6 in O(log3/2 n) worst case time. This result
+was later improved by Chan [13] to support these queries
+in O(log1+ε n) expected time.
+Convex hull implementations. Despite its numerous practical applications, implementations of dynamic convex hulls are scarce. Many approaches rely
+upon static algorithms for the convex hull (e.g., [7, 45,
+8, 23]), and thus have a linear update time. The CGAL
+library for computational geometry algorithms has no
+implementation of dynamic convex hull algorithms. Instead, they use a dynamic algorithm for maintaining
+the Delaunay triangulation of a point set, which itself contains the convex hull. However, dynamic Delaunay triangulations have near-linear update time and
+linear recourse, rendering them useless for polylogarithmic dynamic updates. Chi, Hacı́gümüş, Hsiung, and
+Naughton [16] provide a Java implementation of the dynamic algorithm by Overmars and van Leeuwen, which
+they use for an application in scheduling. Compared
+
+to ours, their algorithm lacks complete geometric robustness, it does not facilitate queries, and it cannot
+be extended to handle rank-ordered data. Independently, Cisneros [19] presents a C implementation of
+the algorithm by Overmars and van Leeuwen. Unfortunately, this implementation is insertion-only and has
+memory leaks. The algorithms for implicit convex hulls
+by Chan [12] and Brodal and Jacobs [9] are not implemented and do not support the operations required for
+our applications. The newer algorithm by Chan [13]
+does support these operations. It is our impression that
+the three latter papers [12, 9, 13], present algorithms
+that are sufficiently complex that further simplifications
+and new ideas are needed if they should be implemented
+in a way that is efficient in practice.
+Applications of (dynamic) convex hull. Convex hulls, or convex hull queries, have countless applications. Here, we list some broad areas of application of
+dynamic convex hull queries. In Appendix C we elaborate on recent applications.
+Query 4 can be used for constraint satisfaction
+problems. Indeed, consider a set of constraints given
+by a collection of halfplanes. Each line supporting these
+halfplanes can be mapped to a point (i.e. its dual ). The
+feasible region is subsequently given by the convex hulls
+of these points. Using Query 4, we can efficiently test if
+a candidate value satisfies all constraints.
+Query 5 can, given a preference vector specifying
+the weight of the x and y coordinates, return the preferred element of P . Repeated application of the convex hull can give the top k preferred elements [37, 28].
+Top-direction queries are often used as an intermediary
+pipeline step in database algorithms [18, 16, 42].
+Query 6 can be used to determine a line that
+minimizes the maximal distance to P . This has a
+direct application in (linear) regression, where we want
+to replace P by a line that for any x-coordinate, can
+predict the corresponding value in P [14, 46, 23].
+The explicit convex hull itself (represented as a subset of point P ′ ⊂ P ) has applications as a pruning
+step for classification algorithms. Intuitively, the convex
+hull P ′ is the subset of ‘extremal’ points in P . Many
+classification algorithms are most sensitive to these extremal values. By maintaining the convex hull, one can
+subsequently run classification algorithms on smallercomplexity input [44, 48, 26, 29]. Similarly, sometimes
+only extremal points are interesting for learning algorithms (pruning the number of points in the training data). Examples include support vector machines
+(SVM) algorithms that use convex hull computations in
+their underlying algorithms [7, 45, 15, 20, 36]. Existing
+SVM algorithms use static convex hulls algorithms.
+We want to briefly note one special application of
+
+convex hull algorithms. Suppose that we are storing
+a (large) set of values Y ⊂ R. The rank of each
+y ∈ Y , is its index in the sorted order of Y and we (a)
+(b)
+want to support rank queries that for query values q
+report the corresponding rank. If Y is a set subject
+Figure 1: (a) The hulls CH(P ) and CH + (P ). (b)
+to insertions and deletions then this is the dynamic
+Given two upper convex hulls CH + (R) and CH + (B),
+indexing problem and it is well-studied [3, 6, 10, 41, 43].
+we construct their bridge.
+Recently, a new family of indexing data structures,
+called learned indexes, has been introduced [32, 22, 23].
+Consider a set of values Y and the corresponding two• We compare our implementations (the simplified
+dimensional point set PY that maps every value in x
+OvL and the new Eilice) to the preexisting dynamic
+to the coordinate (rank, value). By maintaining the
+convex hull implementations on a variety of generconvex hull of PY , recent work [32, 22, 23] uses ML
+ated and adversarial outputs. We conclude that:
+techniques that, for some given parameter ε, predict
+– geometric robustness comes at an expense of
+the rank of each element with some additive error ε.
+computation time,
+Our contribution. Via new theoretical insights,
+– as soon as the access pattern has less than
+we provide a new practical algorithm for the dynamic
+a few hundred queries per update, dynamic
+convex hull problem, and provide an efficient, geometalgorithms have a clear advantage,
+rically robust implementation. Our implementation
+makes use of the CGAL CORE library, to facilitate us– we obtain improved performance compared to
+age in geometric computations. More specifically:
+the state-of-the-art (including [18, 16]).
+• We establish a characterization for where to insert
+edges into a dynamic convex hull based on edge-toedge comparison. This allows for storing the convex 2 Preliminaries
+hull as a collection of edges (as opposed to points)
+which simplifies update logic compared to [40, 16].
+• We apply this characterization to the algorithm
+by Overmars and van Leeuwen [40] to get an
+implementation of a linear-size data structure to
+explicitly maintain a convex hull of size h in a
+balanced binary tree with O(log2 n) update time
+that facilitates queries in O(log h) time.
+• We observe that OvL [40], even when simplified using our streamlined edge-based logic, comes
+with considerable overhead by maintaining what is
+called concatenable queues. We propose a new definition of explicit convex hull, where we do not store
+the edges of the convex hull in their cyclical ordering. Instead, we only require that we may (contrary
+to previous implicit convex hulls) answer queries 1–
+6 and that we can report the h points on the convex
+hull in O(h log n) time.
+• With our edge-based logic, we construct a new
+algorithm, Eilice, for maintaining this hull in
+O(log2 n) worst-case update time with O(log n)
+queries.
+• We provide both a geometrically robust version of
+Eilice, as well as an approximate version since both
+versions have applications in practice.
+• For rank-based convex hulls, we present and implement new algorithms with the guarantees.
+Note: These are the first dynamic algorithms for
+rank-based hulls with polylogarithmic update time.
+
+Let P be a set of n points in R2 . For any two points
+(α, β) we denote by αβ the segment between them. We
+say that a line ℓ separates P whenever it contains at
+least one point of P in the interior of either halfplane
+bounded by the line. The convex hull CH(P ) is the
+edge-set of the minimal convex shape that contains all
+points in P . Equivalently, the convex hull consists of all
+points P ′ such that each line through (p1 , p2 ) ∈ P ′ × P ′
+does not separate P .
+We say a point a precedes a convex hull edge α
+if it has an x-coordinate that is lesser or equal than
+the left endpoint of α. The upper convex hull CH + (P )
+is defined as the convex hull of the set P ∪ {0, −∞}
+((Figure 1 (a)). The lower convex hull CH − (P ) is
+defined as the convex hull of P ∪ {0, ∞}, and when
+we view convex hulls as an area in R2 , CH(P ) =
+CH + (P ) ∩ CH − (P ).
+Consider two point sets A and B that are separated
+by a vertical line. The convex hull CH(A∪B) is formed
+by two segments of CH(A) and CH(B), together with
+up to two edges called bridges. Commonly, a bridge is
+defined as a minimal segment ab for points (a, b) ∈ A×B
+where the line extending ab does not separate A ∪ B,
+see Figure 1(b). One of the bridges coincides with
+CH + (A ∪ B), and one with CH − (A ∪ B).
+Partial
+Hull
+Trees Overmars and van
+Leeuwen [40] maintain the convex hull of a twodimensional point set P by maintaining CH + (P ) and
+CH − (P ) in two separate linear-size data structures
+
+βx
+
+that can answer each of the queries (1)–(6) in O(log h)
+time where h is the size of the convex hull. By
+computing the points of intersection between CH + (P )
+and CH − (P ) they can identify all edges of CH(P ).
+They store CH + (P ) and CH − (P ) in a data structure that we will refer to as a Partial Hull Tree (PHT).
+We recall the data structure for storing the upper convex
+hull CH + (P ) as these data structures are symmetrical.
+Definition 1. Given a two-dimensional point set P ,
+the Partial Hull Tree stores P in a leaf-based balanced
+binary tree T + (sorted by x-coordinates). For each
+interior node v ∈ T + , denote by π(v) the points in the
+leaves at the subtree rooted at v. For each node v ∈ T +
+with children (x, y) and parent v ′ , the Partial Hull Tree
+stores:
+
+x
+
+y
+
+Figure 2: The 9 main cases for a line through the pivots
+(βx , βy ). For each case, [40] can exclude at least 14 of the
+remaining convex hull points as an endpoint of e+ (v).
+The 9’th case is further split into three others.
+the endpoints of e+ (v) succeed, precede or coincide
+with the pivots (Figure 2). Depending on the case,
+they recurse down E(x) and/or E(y).
+3. Since there are at most O(n) points on CH + (π(x))
+and CH + (π(v)), they recurse at most O(log n)
+times before they find the bridge e+ (v) between
+CH + (π(x)) and CH + (π(y)).
+
+• The unique bridge e+ (v) between the upper hulls
+CH + (π(x)) and CH + (π(y)).
+• A concatenable queue E∗ (v). This is a balanced
+binary tree of the vertices of CH + (π(v)) that are
+not in CH + (π(v ′ )) (where v ′ is the parent of v).
+• For the root r of T ∗ , E∗ (r) equals CH + (P ).
+Dynamically maintaining a Partial Hull Tree.
+Let p be a point added to or removed from P and denote
+by ρ the root-to-leaf path to p. In [40], they restore the
+Partial Hull Tree by computing for every node v ∈ ρ the
+bridge e+ (v). Let x and y be the children of v. We define
+a pivot (αx , βx , γx ) as any triple of consecutive points
+on CH + (π(x)). Overmars and van Leeuwen consider a
+pair of pivots (αx , βx , γx ) and (αy , βy , γy ) of x and y.
+Through a case distinction of 11 cases (Figure 2) they
+can conclude if e+ (v) has its left endpoint preceding or
+succeeding βx . This gives the following dynamic update
+algorithm [40] that has two main steps:
+Traversing down. First, they traverse the path
+from the root to the leaf containing p. For every node v
+they encounter, they consider the concatenable queues
+E∗ (v), E∗ (x), E∗ (y). Here x and y denote the left and
+right child of v, respectively. Through the split and
+join operations of balanced binary trees, they obtain
+the convex hulls CH + (π(x)\p) and CH + (π(y)\p) in
+O(log n) time as balanced binary trees E(x) and E(y).
+Bubbling up. Next, they traverse the path from
+the leaf containing p to the root bottom-up and compute
+for every vertex v on the path the bridge e+ (v). Let v
+have children x and y:
+
+βy
+
+Given the bridge e+ (v), they update E∗ (v). After
+having updated E∗ (r) for the root r, they have computed the convex hull CH + (P ).
+Runtime analysis. There are O(log n) nodes v on
+the root-to-leaf path ρ in T + . They iterate over ρ to
+obtain for all v ∈ ρ a binary tree E(v) in O(log2 n) total
+time. Then, they traverse ρ from p towards the root.
+For each v ∈ ρ that the three steps are performed in
+O(log n) time. Thus the total running time is O(log2 n).
+The logarithmic method We briefly mention
+the logarithmic method, since Ferragina and Vinciguerra [23] used it to maintain convex hulls to predict
+the rank of elements in a fully dynamic set. The logarithmic method transforms (decomposable) static data
+structures into insertion-only dynamic structures (see
+e.g. [39]). It uses a bucketing scheme of buckets that
+increases in size exponentially. In Appendix D we describe the logarithmic technique applied to the convex
+hull, and why doing so leads to incorrect query algorithms and hulls.
+3
+
+Simplified Algorithm for Convex Hulls
+
+In this section, we establish a new characterization for
+where to insert new edges into a dynamic convex hull.
+1. Each inner node of E(x) represents an vertex βx . In In this analysis, we use edges of the current convex
+O(1) time they obtain the predecessor or successor hull as pivots, as opposed to the analysis in [40] that
+of βx on CH + (π(x)\p). The endpoints of these uses points (Figure 2). We then use it to provide a
+more straightforward implementation of the algorithm
+edges give a pivot (αx , βx , γx ).
+2. Similarly, each inner node of E(y) comes with a in [40]. Our analysis makes the algorithm in [40] not
+pivot. Given two pivots, they decide in O(1) time if only simpler but also more efficient as we may store and
+
+traverse fewer pointers. To this end, we denote by T +
+the Partial Hull Tree of P where we redefine bridges
+and concatenable queues:
+
+v
+x
+(a)
+
+y
+
+(b)
+
+Definition 2. Let v ∈ T + have children x and y. We Figure 4: (a) Hulls E(x) and E(y). (b) The root v stores
+define its bridge e+ (v) as a maximal segment ab for E∗ (v) = E(v). Its left child x stores E∗ (x) = E(x)\E(v).
+points (a, b) ∈ CH + (π(x)) × CH + (π(y)) where the line
+extending ab does not separate π(x) ∪ π(y) (Figure 3).
+refer indistinguishably between edges σ ∈ E(v) and
+their c-queue node. That is, for each node w ∈ T
+there is a unique ancestor v of w where the bridge
+v
+e+ (w) = σ ∈ E∗ (v).
+y
+x
+
+(a)
+
+(b)
+
+Algorithm 1 splitHull(left child x, balanced tree E(v))
+Figure 3: (a) v ∈ T with children x and y. We show
+(EL , ER ← E(v).Split(e+ (v))
++
+the upper convex hull CH (π(y)). (b) We redefine the
+E(x) ← EL (v).Join(E∗ (x))
++
+bridge e (v) as the maximal non-separating segment
+return (E(x), ER )
+between CH + (π(x)) and CH + (π(y)).
++
+
+3.1 Recomputing bridges using only edges
+Let v ∈ T have children x and y. Our new definition of
+bridges and c-queues allows for new logic to recompute
+the bridge e+ (v) from E(x) and E(y) in O(log n) time.
+We show this through two lemmas:
+In Lemma 3.2, we consider two edges (α, β) ∈
+Lemma 3.1. Let v ∈ T + have children x and y. Given E(x) × E(y). In our data structure, these are both roots
+E(v), E∗ (x), and E∗ (y), we may obtain E(x) in O(log n) of a subtree in their respective trees. We can decide in
++
+time using the split and join operations on binary trees. O(1) time whether e (v)’s endpoints succeed or precede
+these edges: discarding at least one child of either α or
+Proof. The edges of E∗ (x) are a contiguous interval in β until we find one endpoint of e+ (v).
+In Lemma 3.3, let e+ (v) = (a, b). Given a and
+E(v). Moreover, an edge is in E(x) ∩ E(y) if and only
++
+if it precedes the bridge e (v). Thus, we achieve the β ∈ E(y), we can decide in O(1) time whether b precedes
+or succeeds β. The result of these two lemmas is an
+lemma through Algorithm 1.
+O(log n) algorithm to find e+ (v) (Algorithm 2).
+Whenever we invoke Algorithm 1, we store the tree
+ER so that we may invert the algorithm to obtain E(v) Lemma 3.2. Let v ∈ T have children x and y. Given
+from E∗ (x) in O(log n) time.
+edges α ∈ E(x) and β ∈ E(y) with center points
+l and r, respectively, we can decide whether e+ (v)’s
+The Partial Hull Tree and its implementa- endpoints succeed/precede α and β in O(1) time using
+tion. The Partial Hull Tree T + is a balanced binary only arithmetic and comparisons.
+tree on P sorted by x-coordinate. Each node v ∈ T +
+with children x and y stores the bridge e+ (v) between Proof. The proof is a case distinction, depending on
+CH + (π(x)) and CH + (π(y)) and the c-queue E∗ (v). the slope of the segment lr. Denote by (a, b) the
+The Partial Hull Tree T − is defined analogously, using (unknown) endpoints of e+ (v). We consider three cases
+lower convex hulls.
+(where the first two are not mutually exclusive) and
+We note that we can avoid storing P twice: by their consequence:
+maintaining only one tree T where every node v mainSlope(α) ≤ Slope(lr): a must precede α.
+tains both e+ (v) and e− (v). We choose to implement Denote by (α1 , α2 ) the endpoints of α. Consider the
+the Partial Hull Tree and all c-queues as AVL trees be- triangle ∆ = (α1 , l, r). Since slope(α) ≤ slope(lr), and
+cause we want to have worst-case guarantees. To sim- r per construction has a x-coordinate greater or equal to
+plify our internal algorithm’s logic, we define the leaves that of α2 , the point α2 must be on or under the edge lr
+of our c-queue to be points that are the endpoints of of this triangle (Figure 5). Per definition of convexity,
+their parent edges. With slight abuse of notation, we the bridge e+ (v) bounds a halfplane that contains all
+Definition 3. Let v ∈ T + have children x and y.
+Denote by E(v) the edges of CH + (π(v)) in their cyclical
+ordering. We define E∗ (x) := E(x)\E(v) (Figure 4).
+The concatenable queue (or c-queue) is E∗ (x) stored in
+its cyclical ordering as a balanced binary tree.
+
+l′
+
+r
+
+b of e+ (v) succeeds or precedes β in O(1) time using
+only arithmetic and comparisons.
+
+α1
+l
+α2
+
+l′
+
+Proof. Denote by r the center point of β. The sequence
+of edges on the upper convex hull of π(v) per definition
+has decreasing slope. It immediately follows that if
+Figure 5: Lemma 3.2, case 1, for upward and downward Slope(ar) > Slope(β) then b must precede β. Similarly,
+slopes. The purple triangle denotes ∆.
+if Slope(ar) < Slope(β) then b must succeed β. Finally,
+if Slope(ar) = Slope(β) then the points a, r and the
+endpoints of β are collinear. Since our bridge is the
+points in CH + (π(v)). Thus, the bridge e+ (v) bounds a maximal segment bounding a halfplane that contains
+halfplane that must contain ∆.
+π(v), b must succeed β.
+We claim that any point l′ in π(x) right of α1 cannot
+be an endpoint of e+ (v). Indeed, any such point l′ Corollary 3.1. Let v ∈ T have children x and y.
+must lie on or above the line through α1 r (since the Given E(x) and E(y) as balanced trees, we may compute
+halfplane bounded by e+ (v) must contain both a1 and the bridge e+ (v) in O(log n) time (Algorithm 2).
+r). This implies that we have found a l′ ∈ π(x) such
+that the segment α1 l′ has a greater slope than α: which
+contradicts the assumption that α was part of the upper Algorithm 2 FindBridge(node v, α ∈ E(x), β ∈ E(y))
+convex hull of π(x).
+1: while ! (α.isLeaf and β.isLeaf) do
+Slope(lr) ≤ Slope(β): b must succeed β. This
+2:
+(l, r) ← (α, β).getCenter()
+proof is symmetric to the previous case.
+3:
+if Slope(α) ≤ Slope(lr) and !α.isLeaf then
+Slope(α) > Slope(lr) > Slope(β). Denote by
+4:
+α ← α.leftChild
+m a vertical line separating π(x) and π(y) (we can
+5:
+if Slope(lr) ≤ Slope(β) and !β.isLeaf then
+compute such an m in constant time). Denote by γ
+6:
+β ← β.rightChild
+the intersection point between the supporting lines of α
+7:
+if neither first two cases apply then
+and β. We prove that:
+8:
+if β.isLeaf then
+9:
+α ← α.rightChild
+• if γ lies on or left of m, a must succeed α, and
+10:
+else
+if α.isLeaf then
+• if γ lies on or right of m, b must precede β.
+11:
+β ← β.leftChild
+We prove the first subcase (Figure 6), as the second 12:
+else
+subcase is symmetric. Denote by Γ the area that can 13:
+γ ← intersectLines(α, β)
+contain b, the area bounded by the halfplane supporting 14:
+m ← verticalLineSeparating(π(x), π(y))
+β and right of m. Because γ lies left of m, Γ is entirely 15:
+if γ left of m then
+contained in the halfplane bounded by the supporting 16:
+α ← α.rightChild
+line of β. Consider any vertex l′ ∈ π(x) preceding α, the 17:
+else
+segment l′ b must be contained in the halfplane bounded 18:
+β ← β.leftChild
+by α. However, this implies that the segment l′ b bounds 19: return (α, β)
+a halfplane that excludes α2 . Thus, a must succeed α.
+Note that if a succeeds α (and, a lies in the green area
+of the figure) then b may succeed or precede β.
+3.2 The update algorithm using c-queues Now,
+we are ready to present our implementation of the
+dynamic algorithm in [40], using our edge-based logic.
+m
+r
+We call this algorithm OvL. Let us insert or delete a
+γ
+α2
+point p ∈ P and denote by ρ the root-to-leaf path to p
+Γ
+l
+in T . We compute for all v ∈ ρ the bridge e+ (v). This
+allows us to restore all c-queues, and store CH + (P ) in
+E∗ (r) (where r is the root of T ). Our algorithm works
+Figure 6: Lemma 3.2, case 3.
+in two steps, that both take O(log2 n) time:
+Traversing down. We start at the root r where
+Lemma 3.3. Let v ∈ T be an internal node with chil- E∗ (r) = E(r). We traverse ρ from the root to p. For
+dren x and y. Given the left endpoint a of e+ (v) and any each node v, we assume we have E(v) as a balanced
+edge β ∈ E(y), we can decide whether the right endpoint binary tree. Let p lie in the left child x of v (p ∈
+α1
+
+l
+
+α2
+
+r
+
+π(x)). We invoke splitHull(x, E(v)): destroying E(v)
+and storing ER (v) in v. The splitHull function gives us
+E(x) in O(log n) time, and with E(x) we recurse on x.
+Bubbling up. For the leaf l that contains p, the
+bridge e+ (l) equals (p, p). We create or delete this
+bridge accordingly. From the downwards traversal in
+the previous step, we have the tree E(l) at l. We traverse
+ρ from l to the root. For each node v, we compute
+E(v) as follows. Let x and y be the children of v. If
+x is the child on the path, we computed E(x) before
+moving up to v and we have E(y) from our downwards
+traversal. We first invoke Algorithm 2 to compute e+ (v)
+in O(log n) time (Corollary 3.1). We then compute E(v)
+joining E(x) and E(y) around the bridge e+ (v).
+Theorem 3.1. Let P be a two-dimensional point set.
+We can maintain the edges of CH + (P ) subject to
+insertions and deletions in P as a balanced binary tree
+E(r) in O(log2 n) worst-case time per update.
+The balanced binary tree E∗ (r) at the root stores
+the h edges of CH + (P ). Queries 1–6 can subsequently
+be answered in O(log h) time using the standard search
+algorithms over E∗ (r) [13].
+4
+
+Improving the Solution
+
+The update algorithm presented in [40] differs from our
+new approach in the following choices:
+• It traverses the path ρ in T twice: once top-down
+to ensure that we can compute for all v ∈ ρ the tree
+E(v), and once bottom-up to compute the bridges.
+• It stores points in P multiple times (both in T and
+in the c-queues) requiring either double the space
+or pointers that point to non-contiguous data.
+• It uses the split and join operations on binary trees.
+Although these have O(log n) theoretical running
+time, they are inefficient in practice.
+In Appendix A, we resolve these issues. Our
+algorithm no longer maintains the convex hull CH + (P )
+in a balanced binary tree. Instead, we maintain a new
+structure that we call the Partial Bridge Tree (PBT).
+Definition 4. The Partial Bridge Tree (PBT) stores a
+point set P in a leaf-based balanced binary tree T (sorted
+by x-coordinate). Each node v ∈ T stores e+ (v) and
+e− (v).
+We can cleverly navigate our Partial Bridge Tree to get
+two properties:
+1. ∀v ∈ T , given an edge e ∈ CH + (π(v)), we can find
+its successor on CH + (π(v)) in O(log n) time.
+2. ∀v ∈ T , given an edge e ∈ CH + (π(v)), we can
+find the median edge of all edges preceding e on
+CH + (π(v)), in O(log n) time.
+
+The first property allows us to report CH + (P ) in
+O(h log n) time. The second property naively allows
+us to answer Queries 1–6 in O(log2 n) time. Hence,
+we obtain an output that is somewhere in between the
+implicit and explicit convex hull.
+Maintaining the Partial Bridge Tree. The second property naively also gives us an O(log3 n) update
+time to maintain the Partial Bridge Tree. Indeed, consider after inserting or deleting point p in P the path ρ
+from p to the root of T . To restore the Partial Bridge
+Tree, we need to compute for all v ∈ ρ (with children x
+and y) the bridge e+ (v). Algorithm 2 requires as input
+v plus two edges (α, β) ∈ E(x) × E(y). We then recurse
+by replacing α with α′ (the median successor, or predecessor, on E(x)). In Section 3.2, we obtained α′ in O(1)
+time because we had E(x) as a balanced binary tree. Using Property 2, we may instead get α′ in O(log n) time.
+Thus, we obtain an update algorithm with O(log3 n)
+update time and O(log2 n) query time just by replacing
+the functions ‘α.leftChild’ and ‘α.rightChild’ with the
+algorithm from Property 2.
+We can, however, do better. We show that invoking
+Property 2 O(log n) times takes O(log n) worst-case
+total time. This creates a new algorithm for dynamic
+convex hull which we call Eilice. Eilice has a worstcase update time of O(log2 n), matching OvL [40], and
+a query time of O(log n). This update algorithm no
+longer requires us to maintain c-queues. In addition, we
+no longer require the initialization step of OvL: ensuring
+that we traverse T exactly once. Thus, it circumvents
+the downsides of OvL at the cost of query time efficiency.
+5
+
+Rank-based Convex Hulls
+
+Finally, we consider rank-based convex hulls. Let Y be
+a set of values, where the rank of y ∈ Y is its index in
+the sorted order. We denote by PY the two-dimensional
+point set that is obtained by mapping each value in
+Y to (rank, value) and wish to dynamically maintain
+CH(PY ). The problem in this setting is that after
+inserting into or deleting from Y , the x-coordinate of
+linearly many points in PY changes. Changing a value y
+may change CH(PY ) by Θ(n) edges, even if y itself was
+not on the convex hull (Figure 14). The key observation
+to maintaining the convex hull in this setting is the
+following. After updating an element y ∈ Y a bridge
+e+ (v) = (a, b) in the Partial Hull Tree is updated if and
+only if y is in the subtree rooted at v. That is, if y is
+not in the subtree rooted at v then the x-coordinates
+of (a, b) may both increase or decrease by one, but the
+bridge e+ (v) remains a segment between the same two
+values. Since the convex hull is implied by the set of
+all bridges in T , we may still maintain the Partial Hull
+Tree with the previous root-to-leaf update strategy.
+
+Implicit bridges In a Partial Hull Tree T , the
+leaves store the values in PY , sorted by x-coordinate.
+I.e., we store the values of Y in the leaves of T in
+their stored order. For a node v with children x
+and y, the bridge e+ (v) is the bridge between the
+convex hulls CH + (π(x)) and CH + (π(y)). For a bridge
+e+ (v), we can no longer store the endpoints of the
+bridge explicitly: as the x-coordinate of all bridges may
+radically change after an update in Y . We define the
+implicit bridge ε+ (v) which stores only the two values
+(y1 , y2 ) corresponding to the endpoints of e+ (v). At this
+point, we wish to note that we can easily maintain the
+Partial Hull Tree using implicit bridges with a factor
+O(log n) overhead. Indeed, we may run any of the two
+proposed algorithms. Whenever we need to consider a
+bridge α = e+ (x), we can get the corresponding values
+(y1 , y2 ) from the implicit bridge. Then, we may perform
+a binary search over Y to obtain their corresponding
+ranks. Thus, at O(log n) overhead, we always have
+explicit access to the endpoints of α.
+In Appendix B we show that we can cleverly navigate T to avoid this overhead. Our key contribution
+is that we show that we can perform a similar trick
+as for Eilice: performing O(log n) such rank queries
+in O(log n) total time. This gives the first dynamic
+algorithm for rank-based convex hulls with worst-case
+O(log2 n) update time. Our solution has O(log h) query
+time (used as an extension on OvL) or O(log n) query
+time (when applied as an extension of Eilice).
+
+found by static convex hull algorithms implemented in
+CGAL, and verified that they are in agreement.
+We note that comparing implementations across
+programming languages is inherently a dubious task.
+Not only do the languages differ in their approach to
+things like memory management, which can greatly influence practical performance, but in this case, the comparisons are further troubled by the fact that geometric
+robustness has not been implemented for CHHN. The
+comparisons between the Java and C++ implementations should therefore not be seen as direct performance
+comparisons, but rather the Java implementation acts
+as an indicator of existing solutions.
+The experiments are run on a cluster node with an
+Intel Xeon Gold 6226R CPU on a single core at 2.8GHz.
+Test data. We generated four distinct data sets of
+220 points each, following Gamby and Katajainen [24]
+who perform experimental analysis on static convex hull
+algorithms. The first three categories are from [24], and
+the last is tailored to measure behaviour when all points
+lie on the convex hull. Recall that h denotes the number
+of points in CH(P ). We consider the following data
+sets:
+
+Uniformly random data each point of P is drawn
+uniformly at random from a square; thus, the
+expected number of extremal points is Θ(log n).
+Disk-truncated data where each point is drawn uniformly at random, but only added to P when it lies
+in a pre-specified disk. Here, the expected number
+of extremal points is Θ(n1/3 ).
+6 Experiments
+Bell data where data is generated according to√a norIn order to examine the empirical performance of our
+mal distribution (and thus, we expect Θ( log n)
+data structures, we perform a series of tests across
+extremal points).
+several types of input, comparing the performance of our
+Circular data where points are sampled from the
+structure variants with each other, and to state of the
+boundary of a pre-specified disk; i.e. every data
+art implementations of static convex hull algorithms.
+point belongs to the hull.
+Test environment and implementations. For
+experiments we consider the following implementations:
+For the uniformly random and Bell data points, we
+
+follow the specifications of [24]. For the disk-truncated
+and circular points, we consider disks of radius 1000
+centered at (0, 0). We note that in all cases, contrary
+to Gamby and Katajainen [24], we do not restrict the
+points to have integer coordinates. This restriction
+served to avoid correctness issues that can arise in
+practice when comparing floating point values of finite
+precision. Integration with the CGAL geometry kernel
+allows us to circumvent these geometric robustness
+issues, at some cost of performance, opening up for use
+in applications that do not allow for such a restricted
+input.
+Experiments. The contribution of this work is
+The implementations of our data structures are
+available at [4]. As a robustness check, we have an updatable, queriable convex hull implementation for
+compared the points we have found on the hull to those two-dimensional and rank-based datasets. We thus test
+Simplified OvL our simplified Partial Hull Tree structure using concatenable queues.
+Eilice our simplified Partial Hull Tree structure without concatenable queues.
+CHHN a Java implementation of the original Overmars and van Leeuwen structure [17].
+Eddy CGAL implementation of Eddy’s algorithm [21]
+(O(nh) construction time).
+GA CGAL implementation of Andrew’s variant of the
+Graham scan algorithm [1] (O(n log n) construction
+time).
+
+for the following categories:
+Dynamic construction a simulated dynamic scenario in which we construct the hull of a point set
+by repeated extension.
+Extension the time it takes to extend the point set P
+with an additional point set and obtain the convex
+hull of their union.
+Queries the time it takes to perform a sequence of
+point-containment queries on an existing hull.
+Updates the time it takes to perform an interspersed
+sequence of insertions and deletions on an existing
+hull.
+The dynamic construction test serves to emulate
+behaviour one might encounter in a typical dynamic
+setting. The hull is repeatedly extended, so that queries
+can be answered often on the current state of the
+hull. This brings a clear disadvantage to the static
+algorithms, and thus we examine how various rates of
+extension affect their performance.
+For extensions, the static algorithms simply rebuild
+the hull. This is to determine if the dynamic variations
+can compare to simply rebuilding the hull using a static
+algorithm, eliminating the need for a dynamic structure
+in cases where queries are needed on an irregular basis.
+Each measurement of extension adds 50, 000 new points,
+while each set of updates consists of 1000 updates split
+evenly between insertions and deletions. There is no
+overlap between inserted and deleted points, and the
+order of updates is random, emulating the updates
+pattern one might encounter in practical applications.
+Due to the speed at which queries can be answered, we for each measurement perform 220 queries
+for points chosen according to a uniform distribution
+over a bounding box of the area in which the full test
+data resides.
+Results and discussion. For ease of readability,
+we highlight only tests on specific data sets. The
+remainder can be found in Appendix E, and the raw
+results can be found in [4].
+In Figure 8 we show the dynamic construction test
+using 500 point extensions. At roughly a million points
+and forward we see that exact Eilice beats the static
+variations, while the inexact implementations take over
+sooner.
+In practical applications, one’s access pattern might
+require access to the hull more often than once every 500
+updates. For a scenario with access every 50 updates we
+get the results seen in Figure 9 where the clear benefit
+of a dynamic structure can be seen.
+To explicitly showcase the difference in performance
+when comparing exact and inexact implementations, we
+show in Figure 7 the extension time on uniform data.
+
+Figure 7: Extension time on uniform data.
+
+Figure 8: Dynamic construction time using 500 point
+extensions on uniform data.
+What should be noted here is the gap between the inexact and exact data structures. Replacing simple floating
+point comparisons with more robust and involved operations takes a large toll on performance. This is perhaps
+not surprising, but it is necessary if one wants to guarantee correct comparisons, and thus correct behaviour.
+We also show the time spent extending the rank-ordered
+implementation. This is because rank-ordered integers
+avoid some of the pitfalls of geometric robustness, and
+thus fall into a similar category as the inexact implementations. Of note is that the rank-ordered implementation has to do additional bookkeeping, placing it
+somewhat in the middle of the extremes. We also note
+the logarithmic nature of the exact dynamic implementations. The jagged curve of CHHN does not stem from
+
+Figure 9: Dynamic construction time using 50 point
+extensions on uniform data.
+
+Figure 10: Extension time on uniform data of select
+implementations.
+
+the usage of an amortized structure, but rather the Java
+language’s built-in garbage collector periodically performing memory cleaning. The static algorithms have a
+large advantage here, requiring a single reconstruction
+for every 50, 000 insertions, placing them far ahead of
+most of the competition.
+To clarify the behaviour of extension we also show
+in Figure 10 the behaviour excluding the exact dynamic
+implementations. Although tempting to simply claim
+that our simplification causes a speedup of an order
+of magnitude compared to the regular Overmars and
+van Leuween structure, the difference here between Java
+and C++ muddles any conclusions. Here it is also
+clearer that the static algorithms have super-logarithmic
+growth, however, the constants associated with the
+exact implementations mean that data has to grow
+much larger for the exact dynamic implementations to
+extend faster.
+For the queries, we specifically consider the circular
+and uniform random data. Recall that the expected
+number of points on the hull of the uniform data, h, is
+O(log n) for this point set. The benefit of maintaining
+concatenable queues is that they provide the ability
+to answer queries in O(log h) time rather than worstcase O(log n). In Figure 11, however, we see that
+the Eilice algorithm obtains similar performance to
+the simplified OvL solution, even whilst not having
+concatenable queues. This behaviour can be explained
+as follows: the Eilice query algorithm considers an edge
+e+ (v) = α on the upper convex hull. Then, Eilice
+either outputs the correct answer or considers the left
+(or right) child x of v. If the Eilice algorithm does
+not output the correct answer, there exist two cases.
+Either the bridge e+ (x) is also on the convex hull, or
+
+the x-coordinate of e+ (x) succeeds the left endpoint of
+α. The Eilice algorithm makes a comparison that the
+simplified OvL does not make, only in the latter case.
+Due to how the tree is defined and constructed, that
+case is rare. Thus, in practice, the Eilice and simplified
+OvL algorithms oftentimes execute the same decision
+tree before reaching the desired output (even though
+Eilice has a worse worst-case guarantee).
+For the update measurements, shown in Figure 12,
+we again see the logarithmic behaviour for both dynamic
+algorithms. As expected, Eilice beats simplified OvL
+by virtue of not having the overhead associated with
+maintaining concatenable queues.
+Our experiments highlight several key points when
+deciding what algorithms to employ for dynamic convex
+hulls in practice. If geometric robustness is not necessary, one can achieve much greater performance. This
+might be the case in applications that accept erroneous
+queries, in which data is inherently already unreliable,
+or where data happens to be distributed enough that
+errors become unlikely. As an example of the latter,
+the uniform random data set was correctly handled by
+the inexact data structures, while the circular data was
+much more prone to precision errors.
+If geometric robustness is necessary, but queries can
+be relegated to infrequent batches, static recomputations might be preferred, if the queries are infrequent
+enough or the data sizes are large enough.
+If both geometric robustness and dynamic behaviour is required, or data is rank-based, Eilice is the
+clear winner. While leaving out the concatenable queues
+gives worse worst-case guarantees, it requires an adversarial query pattern for the overhead of Eilice to become
+worse.
+
+Figure 12: Time spent on an interspersed sequence of
+500 insertions and 500 deletions on an existing convex
+hull on uniform data.
+References
+
+Figure 11: Query time on circular and uniform data.
+To conclude: We simplify the bridge-finding procedure of Overmars and van Leuween, by a clever change
+from vertex based to edge-based computations. This
+simplification leads to much less error-prone implementations, at no practical cost. We implement and test
+our simplified data structure, along with an additional
+trade-off between queries and updates, by leaving out
+concatenable queues. The implementations are publicly
+available at [4]. We examine the practical implications
+of these simplifications, providing insight into not only
+how our structure performs, but also what factors one
+should consider when employing a dynamic convex hull
+data structure, with guidance for various use cases.
+Finally, the simplified algorithm also easily extends to rank-ordered data, accommodating updates
+and queries in polylogarithmic time, thus giving the first
+data structure for dynamic maintenance of convex hulls
+of rank-ordered data with non-trivial update bounds.
+
+[1] A. M. Andrew. Another efficient algorithm for convex
+hulls in two dimensions. Inf. Process. Lett., 9(5):216–
+219, 1979.
+[2] Alex M Andrew. Another efficient algorithm for convex hulls in two dimensions. Information Processing
+Letters, 1979.
+[3] Manos Athanassoulis and Anastasia Ailamaki. Bf-tree:
+approximate tree indexing. Proceedings of the 40th
+International Conference on Very Large Databases,
+2014.
+[4] Anonymous authors. Dynamic Convex Hull implementations. https://anonymous.4open.science/r/
+DynamicConvexHull-1E62/, 2023.
+[5] C Bradford Barber, David P Dobkin, and Hannu Huhdanpaa. The quickhull algorithm for convex hull. Technical report, Technical Report GCG53, The Geometry
+Center, MN, 1993.
+[6] Michael A Bender, Erik D Demaine, and Martin
+Farach-Colton. Cache-oblivious b-trees. Proceedings
+41st Annual Symposium on Foundations of Computer
+Science, 2000.
+[7] Kristin P Bennett and Erin J Bredensteiner. Geometry
+in learning. MAA NOTES, 2000.
+[8] Antoine Bordes and Léon Bottou. The huller: a simple
+and efficient online svm. In Machine Learning: ECML
+2005: 16th European Conference on Machine Learning,
+Porto, Portugal, October 3-7, 2005. Proceedings 16,
+pages 505–512. Springer, 2005.
+[9] Gerth Stølting Brodal and Riko Jacob. Dynamic planar convex hull. The 43rd Annual IEEE Symposium on
+Foundations of Computer Science, 2002. Proceedings.,
+2002.
+
+[10] Chee-Yong Chan and Yannis E Ioannidis. Bitmap index design and evaluation. Proceedings of the 1998
+ACM SIGMOD international conference on Management of data, 1998.
+[11] Timothy M Chan. Optimal output-sensitive convex
+hull algorithms in two and three dimensions. Discrete
+& Computational Geometry, 1996.
+[12] Timothy M Chan. Dynamic planar convex hull operations in near-logarithmic amortized time. Journal of
+the ACM (JACM), 2001.
+[13] Timothy M Chan. Three problems about dynamic
+convex hulls. Proceedings of the twenty-seventh annual
+symposium on Computational geometry, 2011.
+[14] Yuan-Chi Chang, Lawrence Bergman, Vittorio
+Castelli, Chung-Sheng Li, Ming-Ling Lo, and John R
+Smith. The onion technique: Indexing for linear
+optimization queries. ACM SIGMOD International
+Conference on Management of data, 2000.
+[15] Asdrúbal López Chau, Xiaoou Li, and Wen Yu. Convex and concave hulls for classification with support
+vector machine. Neurocomputing, 2013.
+[16] Yun Chi, Hakan Hacı́gümüş, Wang-Pin Hsiung, and
+Jeffrey F Naughton. Distribution-based query scheduling. Proceedings of the VLDB Endowment, 2013.
+[17] Yun Chi, Hakan Hacı́gümüş, Wang-Pin Hsiung, and
+Jeffrey F Naughton. Java implementation convex
+hull. https://github.com/yunchi/Dynamic_Convex_
+Hull, 2013.
+[18] Yun Chi, Hyun Jin Moon, and Hakan Hacigümüş.
+icbs: incremental cost-based scheduling under piecewise linear slas. Proceedings of the VLDB Endowment,
+4(9):563–574, 2011.
+[19] Jose Alberto Cisneros. Maintenance of the convex hull
+of a dynamic set. Master’s thesis, 2007.
+[20] David Crisp and Christopher J Burges. A geometric
+interpretation of v-svm classifiers. Advances in neural
+information processing systems, 1999.
+[21] William F. Eddy. A new convex hull algorithm for
+planar sets. ACM Trans. Math. Softw., 3(4):398–403,
+1977.
+[22] Paolo Ferragina and Giorgio Vinciguerra. Learned
+data structures. Recent Trends in Learning From Data:
+Tutorials from the INNS Big Data and Deep Learning
+Conference (INNSBDDL2019), 2020.
+[23] Paolo Ferragina and Giorgio Vinciguerra. The pgmindex: a fully-dynamic compressed learned index with
+provable worst-case bounds. Proceedings of the VLDB
+Endowment, 2020.
+[24] Ask Neve Gamby and Jyrki Katajainen. Convex-hull
+algorithms: Implementation, testing, and experimentation. Algorithms, 2018.
+[25] Xu Gao and Fusheng Yu. Trajectory clustering using
+a new distance based on minimum convex hull. 2017
+Joint 17th World Congress of International Fuzzy Systems Association and 9th International Conference on
+Soft Computing and Intelligent Systems (IFSA-SCIS),
+2017.
+[26] Thomas Giorginis, Stefanos Ougiaroglou, Georgios
+
+Evangelidis, and Dimitris A Dervos. Fast data reduction by space partitioning via convex hull and mbr computation. Pattern Recognition, 2022.
+[27] Ronald L. Graham. An efficient algorithm for determining the convex hull of a finite planar set. Information Processing Letters (IPL), 1972.
+[28] Sun-Young Ihm, Ki-Eun Lee, Aziz Nasridinov, JunSeok Heo, and Young-Ho Park. Approximate convex
+skyline: a partitioned layer-based index for efficient
+processing top-k queries. Knowledge-Based Systems,
+2014.
+[29] MA Jayaram and Hasan Fleyeh. Convex hulls in image
+processing: a scoping review. American Journal of
+Intelligent Systems, 2016.
+[30] Hamid Reza Khosravani, AE Ruano, and Pedro M
+Ferreira. A convex hull-based data selection method
+for data driven models. Applied Soft Computing, 2016.
+[31] David G Kirkpatrick and Raimund Seidel. The ultimate planar convex hull algorithm? SIAM journal on
+computing, 1986.
+[32] Tim Kraska, Alex Beutel, Ed H Chi, Jeffrey Dean, and
+Neoklis Polyzotis. The case for learned index structures. Proceedings of the 2018 international conference
+on management of data, 2018.
+[33] Luca Liparulo, Andrea Proietti, and Massimo Panella.
+Fuzzy clustering using the convex hull as geometrical
+model. Advances in Fuzzy Systems, 2015.
+[34] Kaiqi Liu and Jianqiang Wang. Fast dynamic vehicle
+detection in road scenarios based on pose estimation
+with convex-hull model. Sensors, 2019.
+[35] Dragos D Margineantu and Thomas G Dietterich.
+Pruning adaptive boosting. ICML, 1997.
+[36] Michael E Mavroforakis, Margaritis Sdralis, and Sergios Theodoridis. A novel svm geometric algorithm
+based on reduced convex hulls. 18th International Conference on Pattern Recognition (ICPR’06), 2006.
+[37] Kyriakos Mouratidis. Geometric approaches for top-k
+queries [tutorial]. 2017.
+[38] George Ostrouchov and Nagiza F Samatova. On
+fastmap and the convex hull of multivariate data: toward fast and robust dimension reduction. IEEE transactions on pattern analysis and machine intelligence,
+2005.
+[39] Mark H Overmars. The design of dynamic data
+structures. Springer Science & Business Media, 1983.
+[40] Mark H Overmars and Jan van Leeuwen. Dynamically
+maintaining configurations in the plane (detailed abstract). Proceedings of the twelfth annual ACM Symposium on Theory of Computing, 1980.
+[41] Rasmus Pagh and Flemming Friche Rodler. Cuckoo
+hashing. Journal of Algorithms, 2004.
+[42] Hongchao Qin, Rong-Hua Li, Ye Yuan, Guoren Wang,
+Lu Qin, and Zhiwei Zhang. Mining bursting core
+in large temporal graphs. Proceedings of the VLDB
+Endowment, 2022.
+[43] Jun Rao and Ross. Kenneth. Cache conscious indexing
+for decision-support in main memory. Conference on
+Very Large Data Bases (VDLB), 1999.
+
+[44] Jörg Sander, Martin Ester, Hans-Peter Kriegel, and
+Xiaowei Xu.
+Density-based clustering in spatial
+databases: The algorithm gdbscan and its applications.
+Data mining and knowledge discovery, 1998.
+[45] Di Wang, Hong Qiao, Bo Zhang, and Min Wang. Online support vector machine based on convex hull vertices selection. IEEE transactions on neural networks
+and learning systems, 2013.
+[46] Tom F Wilderjans, Eva Ceulemans, and Kristof Meers.
+Chull: A generic convex-hull-based model selection
+method. Behavior research methods, 2013.
+[47] Da Yan, Zhou Zhao, and Wilfred Ng. Efficient algorithms for finding optimal meeting point on road networks. Proceedings of the VLDB Endowment, 2011.
+[48] Bo Yuan and Chew Lim Tan. Convex hull based skew
+estimation. Pattern Recognition, 2007.
+
+α = e+ (w)
+x
+z
+(a)
+
+α ∈ E(x)
+1
+
+y
+
+2
+
+(b)
+
+Figure 13: (a) A node v with children x and y. We
+show the medians as vertices with the same colour as
+the corresponding node.
+A
+
+Eilice: updates without c-queues
+
+The update algorithm OvL has three components that
+make it practically less efficient:
+• It traverses the path ρ in T twice: once top-down
+to ensure that we can compute for all v ∈ ρ the tree
+E(v), and once bottom-up to compute the bridges.
+• It stores points in P multiple times (both in T and
+in the c-queues) requiring either double the space
+or pointers that point to non-contiguous data.
+• It uses the split and join operations on binary trees.
+Although these have O(log n) theoretical running
+time, are very inefficient in practice.
+In this subsection, we show that we may avoid
+maintaining c-queues and these downsides by navigating
+only T . As a result, we obtain different outputs than the
+OvL algorithm. We no longer are able to store CH(P )
+in a balanced binary tree. Instead, we ensure that at all
+times we can report the h points on CH(P ) in O(h log n)
+time. In addition, we show that we facilitate convex hull
+queries in O(log n) time as opposed to O(log h) time.
+Key definitions. Definition 4 gives the definition
+of our data structure: the Partial Bridge Tree T (PBT).
+Let v ∈ T be an internal node, then per definition, v has
+two children. The median med(v) is the leftmost point
+in the subtree of the right child of v (see Figure 13 (a) ).
+Our key observation is that for every node v: the bridge
+e+ (v) (when projected onto the x-axis) is an x-interval
+that contains med(v):
+Lemma A.1. Let v be a node in T and e be the corresponding bridge. Then e+ (v) either has med(v) as its
+right endpoint or has two endpoints that precede and
+succeed med(v), respectively.
+Proof. Let v have children x and y. The lemma follows
+from the fact that med(v) is the leftmost point in π(y),
+all points in π(x) precede med(v), and e+ (v) = (a, b) ∈
+π(x) × π(y).
+We may use this lemma, together with the following
+observation to obtain an equivalent to Corollary 3.1:
+
+Observation 1. Let w ∈ T and denote by α = Lemma A.3. Given the Partial Bridge Tree T , we can
+e+ (w) = (a, b). For any vertex l in the left subtree un- report the h edges on CH + (P ) in O(h log n) time.
+der w with bridge γ = e+ (l), there are two cases (see
+Proof. This lemma follows almost immediately from
+Figure 13(b)):
+Observation 1 and the leftChild() and rightChild()
+1. The left endpoint of γ succeeds a. Then all bridges functions. Indeed, let r be the root of T , then
+in the right subtree of l are either not on E(x) (as e+ (r) = α ∈ E(r) = CH + (P ). We recursively inthey are ‘covered’ by α) or also succeed a.
+voke e+ (r).lef tChild() to obtain an edge β ∈ CH + (P ).
+2. The right endpoint of γ precedes a. Then γ ∈ E(x). All edges of CH + (P ) in between α and β = e+ (w),
+per definition succeed α and precede β. Thus, we may
+Lemma A.2. Let v ∈ T have children x and y. Rerecurse into the right subtree of w to obtain vertices
+call that E(x) and E(y) are the convex hull edges of
+x ∈ T . We may again apply Observation 1 to note that
++
++
+CH (π(x)) and CH (π(y)) in their cyclical ordering.
+if e+ (x) ∈ CH + (P ) if and only if it precedes β and sucGiven edges α = e+ (x) and β = e+ (y), we may compute
+ceeds α. This way, each time we explore a new subtree in
+the bridge e+ (v) in O(log n) time (Algorithm 2+3).
+T we find at least one edge of CH + (P ). Since our funcProof. We no longer have access to E(x) and E(y) as tion recurses at most O(log n) times before it reaches
++
+balanced binary trees. In Algorithm 2, we consider a leaf of T and thus we output CH (P ) in O(h log n)
+edges (α, β) ∈ E(x) × E(y) and we use Lemma 3.2 time.
+to decide whether the bridge endpoints e+ (v) precede
+Update algorithm. Let p be a point that is
+or succeed α. Suppose that the left endpoint of e+ (v)
+inserted
+or deleted in P . We restore the Partial Bridge
+precedes α (all other scenarios are symmetrical). Then,
+′
+Tree
+as
+follows:
+we do a root-to-leaf traversal in T to
+we replace α by an edge α ∈ E(x) that precedes α. In
+′
+the
+leaf
+l
+that
+contains
+p: spending O(1) time per node.
+Section 3, we obtain α by simply replacing α with its
+For
+deletions,
+we
+may
+avoid
+this by following a pointer
+left child in the balanced binary tree on E(x).
+to
+the
+leaf
+in
+T
+.
+Denote
+by
+ρ the path from l to the
+Since we no longer have this binary tree, for any
+root
+of
+T
+.
+For
+all
+v
+∈
+ρ,
+bottom-up,
+we use Lemma A.2
+edge α ∈ E(x) its left child (or right child) is no longer
++
+to
+compute
+e
+(v)
+and
+this
+restores
+the Partial Bridge
+well-defined. Thus all code lines that say α.leftChild
+2
+Tree.
+Thus,
+we
+have
+an
+O(log
+n)
+update
+algorithm to
+(or α.rightChild) were no longer well-defined. However,
+maintain
+our
+Partial
+Bridge
+Tree.
+for all α ∈ E(x) there exists a node w ∈ T where
+α = e+ (w). We now note that Algorithm 3 gives us
+A.1 Supporting queries What remains is to show
+an edge α′ preceding α on E(x).
+This leads to a simple alteration of Algorithm 2. that our data structure can answer Queries (1)-(6) in
+Note that the function α.rightChild() can be defined O(log n) time. The standard algorithms to answer these
+queries assume access to a balanced binary tree E(r)
+analogously. We replace all calls:
+that stores the upper convex hull edges in their sorted
+• α.leftChild by α.leftChild(),
+order. Each of these algorithms subsequently does the
+• β.leftChild by β.leftChild(),
+following: they consider an edge α ∈ E(r). They can
+• α.rightChild by α.rightChild(),
+either answer the query immediately using α or discard
+• β.rightChild by β.rightChild().
+all edges of the convex hull preceding or succeeding α.
+Doing this for both the upper and lower convex hull
+In each iteration of the while loop, either α is a leaf
+allows queries can be answered in O(log h) time where
+in T or an edge on E(x). We may call invoke the function
+h is the number of edges in E(r). Using Algorithm 3
+leftChild() at most O(log n) times until we reach a leaf
+to navigate T instead of E(r) allows our approach to
+of T . Thus, Algorithm 2 terminates in O(log n) time
+immediately answer queries in O(log n) time instead.
+and computes the bridge e+ (v).
+To illustrate this, we show how to answer Query (4):
+deciding whether a query point q lies in CH(P ).
+Algorithm 3 α.leftChild() for α = e+ (w) and α ∈ E(x)
+1: l ← the left child of w in T
+2: γ ← e+ (l)
+3: if γ.x succeeds α.x then
+4:
+return l.leftChild()
+5: return (e+ (l), l)
+
+Lemma A.4. Let q be an arbitrary query point in R2 .
+Using our data structure we can test if q ∈ CH(P ) using
+our Partial Hull Tree in O(log n) time.
+Proof. Note that q lies in CH(P ) if and only if it
+lies in both CH + (P ) and CH − (P ). The point q lies
+in CH + (P ) if and only if there exists a unique edge
+
+γ ∗ ∈ E(r) where: q succeeds the left endpoint of γ ∗ , q
+precedes the right endpoint of γ ∗ . Moreover, q must lie
+below the line through γ ∗ . Denote by r the root of the
+Partial Hull Tree.
+Per definition, e+ (r) ∈ E(r). Set α ← e+ (r) We test
+in O(1) time whether q succeeds the left endpoint of α
+and precedes the right endpoint of α, If both conditions
+are true then γ ∗ = α, we output whether q is below
+the line through α. If q precedes the left endpoint of α
+then γ ∗ must precede α on the upper convex hull. Thus,
+we may step left from α using Algorithm 3. It follows
+that in O(log n) steps, we find γ and answer the query
+accordingly.
+
+implicit bridge ε+ (v) which stores only the two values
+(y1 , y2 ) corresponding to the endpoints of e+ (v). At this
+point, we wish to note that we can easily maintain the
+Partial Hull Tree using implicit bridges with a factor
+O(log n) overhead. Indeed, we may run any of the two
+proposed algorithms. Whenever we need to consider a
+bridge α = e+ (x), we can get the corresponding values
+(y1 , y2 ) from the implicit bridge. Then, we may perform
+a binary search over Y to obtain their corresponding
+ranks. Thus, at O(log n) overhead, we always have
+explicit access to the endpoints of α.
+In the remainder of this section we show that we
+can cleverly navigate T to avoid this overhead. To this
+end, we recall that for a vertex v its median med(v)
+Maintaining our data structure, with the above was the leftmost child in the right subtree rooted at
+query algorithms, implies the following theorem:
+v. We define the widths ω1+ (v) (and ω2+ (v)) to be the
+Theorem A.1. Let P be a two-dimensional point set. rank-difference between y1 and med(v) +(and y2+and
++
+We can store P in an O(n) size data structure with med(v)). Finally, we denote ω(e (x)) = ω1 (v)+ω2 (v).
+O(log2 n) worst-case time per update such that we may See Figure 14(b) for an example. In our Partial Hull
+report the h edges on CH(P ) in O(h log n) worst-case Tree, we now require that each v ∈ T stores the size
+time. Moreover, we support all convex hull queries in of its subtree, a pointer to the median of v med(v),
+and two implicit bridges ε+ (v), ε− (v) plus their widths
+O(log n) worst-case time.
+ω1+ (v), ω2+ (v), ω1− (v), ω2− (v). We note:
+B
+
+Ranked-based convex hulls
+
+In this section, we consider rank-based convex hulls. Let
+Y be a set of values, where the rank of y ∈ Y is its
+index in the sorted order. We denote by PY the twodimensional point set that is obtained by mapping each
+value in Y to (rank, value) and wish to dynamically
+maintain CH(PY ). The problem in this setting is that
+after inserting into or deleting from Y , the x-coordinate
+of O(n) points in PY changes. Changing a value y may
+change CH(PY ) by O(n) edges, even if y itself was not
+on the convex hull (Figure 14). The key observation
+to maintaining the convex hull in this setting is the
+following. After updating an element y ∈ Y a bridge
+e+ (v) = (a, b) in the Partial Hull Tree is updated if and
+only if y is in the subtree rooted at v. That is, if y is
+not in the subtree rooted at v then the x-coordinates
+of (a, b) may both increase or decrease by one, but the
+bridge e+ (v) remains a segment between the same two
+values. Since the convex hull is implied by the set of
+all bridges in T , we may still maintain the Partial Hull
+Tree with the previous root-to-leaf update strategy.
+Implicit bridges In a Partial Hull Tree T , the
+leaves store the values in PY , sorted by x-coordinate.
+I.e., we store the values of Y in the leaves of T in
+their stored order. For a node v with children x
+and y, the bridge e+ (v) is the bridge between the
+convex hulls CH + (π(x)) and CH + (π(y)). For a bridge
+e+ (v), we can no longer store the endpoints of the
+bridge explicitly: as the x-coordinate of all bridges may
+radically change after an update in Y . We define the
+
+Lemma B.1. Let v ∈ T , and denote by r the rank of
+med(v). Given r and v, we can compute the bridge
+e+ (v) in O(1) time.
+Proof. The x-coordinate of the left endpoint of e+ (v) is
+simply r minus ω1+ (v). The x-coordinate of the right
+endpoint of e+ (v) is r plus ω1+ (v). The y-coordinates of
+both endpoints are stored in the implicit bridge ε+ (v).
+
+B.1 Updates using c-queues Recall that for any
+v ∈ T , E(v) was a balanced binary tree on the convex
+hull edges CH + (π(v)) in their cyclical ordering. If
+v had a child x, then the concatenable queue E∗ (x)
+was defined as the balanced binary tree E(X)\E(v).
+We now define E(v) and E ∗ (x) analogously, where the
+inner nodes of the balanced binary trees store implicit
+edges bridges instead. Moreover, we demand that every
+α ∈ E(x) stores the sum over all its descendants β
+of ω(β). Note that these sums can be maintained at
+
+(a)
+
+(b)
+
+ω1+ (v)ω2+ (v)
+
+Figure 14:
+(a) A set Y of values, mapped to PY .
+Deleting the blue value adds O(n) edges to CH(PY ).
+(b) The bridge e+ (v), the vertex med(v) as a square
+and the corresponding widths.
+
+O(log n) time per insertion, deletion, split or join in
+the tree. Moreover, for each tree rotation, these sums
+can be updated in O(1) time. When storing the convex
+hull for rank-ordered data, we demand that each node
+v ∈ T stores E ∗ (v); with the aforementioned sums in
+each node.
+Let us insert or delete a value y ∈ Y . The update
+algorithm consists of three components which we will
+explain in order:
+
+a symmetrical procedure to compute an edge ζ ∈ E(z)
+and recurse to compute e+ (v). Doing this for all v ∈ T
+on the leaf-to-root path from the update implies the
+following theorem:
+Theorem B.1. Let Y be a dynamic set of values. We
+can maintain the edges of CH + (PY ) (stored as implicit
+edges ε(w)) subject to insertions and deletions in P as
+a balanced binary tree E(r) in O(log2 n) worst-case time
+per update.
+
+• an initialization over the root-to-leaf traversal in T
+to y,
+• a bubble-up update strategy, where we compute
+for each node v on the leaf-to-root path the new
+bridge e+ (v). We compute the bridge with its exact
+coordinates; from which we will derive ε+ (v) and
+the widths in O(1) time. Finally,
+• a search algorithm to recompute for v the bridge
+e+ (v).
+
+What remains is to show that we can support
+queries in O(log h) time. Let r be the root of the Partial
+Hull Tree T and denote by E(r) the corresponding
+concatenable queue. The root of E(r) is the implicit
+bridge ε+ (r). We may maintain the rank of med(r) at
+no additional overhead. Thus by Lemma B.1, we may
+compute the edge α at the root of E(r) in O(1) time.
+From here, we can perform queries in the same way that
+we find bridges: deciding whether to go into the left or
+Traversing down. We start at the root r where right subtree of our current edge in E(r), and computing
+∗
+E (r) = E(r). We do a root-to-leaf traversal to y. For the explicit edge at the root of the new subtree in O(1)
+each node v that we encounter, we store the rank of time. It follows that we may answer Queries (1)-(6) in
+med(v). We assume that as we arrive at a node v, we O(log h) time (where h is the number of edges on the
+have E(v) as a balanced binary tree. Let y ∈ π(x) for convex hull of PY .
+the left child x of v. We invoke splitHull(x, E(v)), store
+ER (v) in v. We compute E(x) from the result of splitHull B.2 The update algorithm without c-queues
+Let v ∈ T and r be the rank of med(v). Finally let
+and recurse.
+Bubbling up. In the leaf l that contains y, the x be any child of v. In the previous section we showed
+′
+bridge e+ (l) equals (y, y) and med(l) = y. We then that we may compute the rank r of med(x) from r in
+consider each node v on the leaf-to-root path from l in O(1) time by subtracting from (or adding to) r the size
+′
+T . Note that we have stored the rank r of med(v) Using of the other subtree of v. By Lemma B.1, we may use r
++
++
++
++
+r, E(x), and ER (v), we recompute e (v). From e (v) to compute e (x) from ε (x) in O(1) time. This implies
+∗
+and r, we compute ε+ (v) and the corresponding widths. that by maintaining our new concatenable queues E (x),
+This allows us to compute E(v) and continue upwards we may run the algorithm of Section A, without any
+in T . If our update requires us to rotate v in T , we additional overhead (other than maintaining for every
+node v ∈ T the size of its subtree).
+recompute the bridge of all rotating nodes.
+Our repository also includes implementations for
+Recomputing bridges. Given a node v ∈ T , the
+rank r of med(v), E(x), and ER (v) we do as follows. maintaining rank-based convex hulls.
+Denote by x the left child of v and by z the right child
+of v. From r, we can compute the ranks of med(x)
+and med(z) in O(1) time. Given ER (v) we can compute
+E(z) from E ∗ (z) using a single join operation. The root
+of E(x) is α′ = ε+ (x). We apply Lemma B.1 to compute
+α = e+ (x) in O(1) time. Similarly, we obtain β = e+ (z)
+in O(1) time. It follows that we may apply Lemma 3.2.
+Suppose that the Lemma indicates that we may
+discard the subtree of E(x) right of α. Let γ = e+ (w)
+be the left child of α (for some w ∈ T ). Denote by
+γ ′ = ε+ (w) the left child of γ ′ . The rank of the right
+endpoint of γ is equal to the rank of the left endpoint of
+α, minus the width of all edges between γ and α. Thus,
+we may compute the edge γ from γ ′ in O(1) time by
+subtracting the width sum stored in γ. We can perform
+
+C
+
+Applying Dynamic Convex Hull
+
+We review three applications of a dynamic convex hull
+in VDLB.
+Query scheduling. For the query scheduling
+problem we consider incoming database queries, which
+each come with associated costs and gains. Efficient
+queries may be prioritized, whereas expensive queries
+may even be dropped if they bring too little gain compared to the other current queries. The goal is to prioritize queries to maximize the gains. At VDLB 2011,
+Chi, Moon, and Hacı́gümüş [18] study this problem, assuming that the cost/gain function of queries follows a
+piecewise linear function. I.e., the gains of answering
+a query diminish piecewise linearly with the response
+
+time. They present a heuristic optimizer that relies
+upon a dynamic convex hull algorithm. This convex
+hull algorithm maps (dualizes) the piecewise linear functions to two-dimensional points. Because they work
+with dualized points, they need to maintain the convex hull explicitly. They maintain the convex hull using
+the Overmars and van Leeuwen algorithm. They subsequently can use the convex hull to deduce which queries
+to prioritize. At VDLB 2013, Chi, Hacı́gümüş, Hsiung, and Naughton [16] study the same problem, under
+the assumption that there exists some underlying cost
+distribution on query time per query type. On a high
+level, they design an equation that maps every query q
+to a two-dimensional point which they call their Shepard score. They subsequently want to prioritize queries
+with critical Shepard scores. To this end, they maintain
+the Shepard scores (dualized) in the convex hull data
+structure by Overmars and van Leeuwen. The authors
+present their own Java implementation to maintain this
+hull, which can be found at [17].
+Mining bursty subgraphs In temporal graphs,
+each edge can be represented as a triple (u, v, t), where
+u, v are two end nodes of one edge and t denotes the
+interaction time between u and v [42]. A time-frame is
+bursty whenever a large number of events occurs in a a
+short time. In VDLB 2022, Qin, Li, Yuan, Wang, Qin
+and Zhang [42] study the problem of ‘mining’ bursty
+patterns in a temporal graph. They present a dynamic
+program, that for every vertex u in the graph computes
+the cumulative density of a ‘front’ from u in the graph
+G over time. To compute this front, they repeatedly
+recompute the (lower) convex hull of their function from
+u. This step may be replaced by a dynamic convex hull
+algorithm.
+PGM index Ferragina and Vinciguerra [23] study
+a dynamic sorted set of values Y subject to rank queries.
+They map Y to the point set PY and choose some
+ε > 0. A segment s ε-covers a consecutive set of
+values (y1 , . . . , yk ) whenever s is within distance ε of
+all corresponding points (p1 , . . . , pk ). An ε-cover is
+a set of segments S that together ε-cover all points
+in PY . Denote by mε the minimal size for an εcover. The authors present an amortized O(log n)
+algorithm to maintain an ε-cover. They claim to
+support rank queries in O(log n(log mε + log ε)) time.
+Their approach (under the hood) maintains the convex
+hull of PY through the logarithmic method: splitting
+Y over buckets B, and maintaining for the points
+PB a minimal ε-cover (through indirectly maintaining
+CH(PB )). Their approach has the same pitfall as hull
+queries under the logarithmic method: when Y is split
+over buckets, the complexity CH(PB ) (and thereby
+the complexity of the ε-cover) may significantly exceed
+
+that of CH(PY ). Without an algorithm to maintain
+CH(PY ) explicitly, their query time is O(log n(log n +
+log ε)).
+D
+
+The Logarithmic Method and Convex Hull
+
+Here we describe the logarithmic technique applied to
+the convex hull, and why doing so leads to incorrect
+query algorithms and hulls.
+Consider P under insertions and Graham’s scan
+algorithm (which uses O(n) time for a sorted input set).
+We store P in buckets Bi of 2i elements, where each Bi
+is either full or empty. Denote by π(B) ⊂ P the points
+stored in a bucket B. For each bucket B we store the
+convex hull CH(π(B)) Whenever we insert an element,
+we insert it in B2 . Suppose that an insertion causes B2
+to be full and let the first k buckets be full. We then
+merge buckets B2 , . . . , Bk into the new bucket Bk+1 .
+During the merge, we ensure that the new bucket Bk+1
+contains all values in sorted order in O(2k+1 ) time by
+the same procedure as merge sort. Then, we construct
+the convex hull in O(2k+1 ) time using Graham’s scan.
+This procedure has O(log n) amortized update time.
+However it does not maintain the convex hull of P , nor
+does it answer convex hull queries correctly:
+Consider (Figure 15) a set P of red and blue points
+where the convex hull of P contains three points. When
+we split the convex hull over two buckets (red and blue)
+both convex hulls contain many points. Moreover, suppose that we query whether a point q lies in CH(P ) (the
+black square). It may be that q is in none of the convex
+hulls CH(Bi ), even though it does lie in CH(P ). This
+inconsistency causes [23] to store something slightly different from advertised (Appendix C).
+
+(a)
+
+(b)
+
+Figure 15: (a) A point set P and its convex hull. (b)
+When we split P over two buckets B, B ′ , the hulls
+CH(π(B)) and CH(π(B ′ )) have considerably higher
+complexity, and don’t contain the black query square.
+
+E
+
+Additional Results
+
+Figure 16: Dynamic construction time using 500 point
+extensions on various distributions.
+
+Figure 17: Dynamic construction time using 500 point
+extensions on various distributions.
+
+Figure 18: Extension time on various distributions.
+
+Figure 19: Extension time on various distributions.
+
+Figure 20: Update time on various distributions.
+
+Figure 21: Update time on various distributions.
+
+Figure 22: Query time on various distributions.
+
+Figure 23: Query time on various distributions.
+
+

@@ -36,8 +36,23 @@ protected:
 
     template<bool lower>
     bool m_comp(const Bridge& l, const Bridge& r, const Point& m){
-        if(l.is_vertical()) return !lower;
-        if(r.is_vertical()) return lower;
+        // Handle vertical line cases based on x-coordinate of midpoint
+        if(l.is_vertical()) {
+            // If l is vertical, compare where m.x is relative to l.min().x
+            // For lower hull: if m.x >= l.x, result is effectively "l at m.x is undefined/far"
+            // Default behavior: return !lower ensures correct navigation
+            return !lower;
+        }
+        if(r.is_vertical()) {
+            // If r is vertical at x=r_x:
+            // - If m.x < r_x: compare l(m.x) with r, but r is undefined at m.x
+            //   For lower hull, we should step on y-side (return true means step x, so return false)
+            // - If m.x >= r_x: similar logic
+            // The original "return lower" was incorrect for cases where m.x < r.min().x
+            // Correct: for lower hull, when r is vertical and m.x is left of r, return !lower (go left on y)
+            if (m.x() < r.min().x()) return !lower;
+            return lower;
+        }
         CGAL::Comparison_result res = compare_at_x(m,l.supporting_line(),r.supporting_line());
         if(res == CGAL::EQUAL) return true;
         return (res == CGAL::SMALLER) == lower;
@@ -50,6 +65,9 @@ protected:
         return (res == CGAL::LARGER) == lower;
     }
 
+    // Debug flag for tracing findBridge - set to true to enable logging
+    static constexpr bool DEBUG_FIND_BRIDGE = false;
+
     template<bool lower>
     Bridge findBridge(Node* v){
         Node* x = v->left;
@@ -61,33 +79,74 @@ protected:
         Bridge e_l, e_r, lr;
         bool undecided;
 
-        Point m = midpoint(x->max[lower].max(),y->min[lower].min());
-
+        int step = 0;
         while (!(isLeaf(x) && isLeaf(y))) {
             undecided = true;
             // Safety check for nulls during traversal
             if (!x || !y) break;
 
+            // Recompute midpoint m based on current x and y (FIX: was computed once outside loop)
+            Point m = midpoint(x->max[lower].max(), y->min[lower].min());
+
             e_l = x->val[lower];
             e_r = y->val[lower];
             lr = Bridge(midpoint(e_l),midpoint(e_r));
+            
+            if constexpr (DEBUG_FIND_BRIDGE) {
+                std::cerr << "\nStep " << step++ << ":\n";
+                std::cerr << "  m: (" << m.x() << ", " << m.y() << ")\n";
+                std::cerr << "  e_l: (" << e_l.min().x() << "," << e_l.min().y() << ") -> (" 
+                          << e_l.max().x() << "," << e_l.max().y() << ")\n";
+                std::cerr << "  e_r: (" << e_r.min().x() << "," << e_r.min().y() << ") -> (" 
+                          << e_r.max().x() << "," << e_r.max().y() << ")\n";
+                std::cerr << "  lr: (" << lr.min().x() << "," << lr.min().y() << ") -> (" 
+                          << lr.max().x() << "," << lr.max().y() << ")\n";
+            }
+            
             if (!isLeaf(x) && slope_comp<lower>(e_l,lr)){
+                if constexpr (DEBUG_FIND_BRIDGE) {
+                    std::cerr << "  -> stepLeft (slope_comp(e_l,lr) true)\n";
+                }
                 x = stepLeft<lower>(x); undecided = false;
             }
             if (!isLeaf(y) && slope_comp<lower>(lr,e_r)) {
+                if constexpr (DEBUG_FIND_BRIDGE) {
+                    std::cerr << "  -> stepRight (slope_comp(lr,e_r) true)\n";
+                }
                 y = stepRight<lower>(y); undecided = false;
             }
             if (undecided) {
-                if (!isLeaf(x) && m_comp<lower>(e_l,e_r,m) || isLeaf(y)) {
+                bool mresult = m_comp<lower>(e_l,e_r,m);
+                if constexpr (DEBUG_FIND_BRIDGE) {
+                    std::cerr << "  UNDECIDED: m_comp=" << mresult << ", isLeaf(x)=" << isLeaf(x) << ", isLeaf(y)=" << isLeaf(y) << "\n";
+                }
+                if (!isLeaf(x) && mresult || isLeaf(y)) {
+                    if constexpr (DEBUG_FIND_BRIDGE) {
+                        std::cerr << "  -> stepRight on x (undecided, m_comp or y is leaf)\n";
+                    }
                     x = stepRight<lower>(x);
                 } else {
+                    if constexpr (DEBUG_FIND_BRIDGE) {
+                        std::cerr << "  -> stepLeft on y (undecided)\n";
+                    }
                     y = stepLeft<lower>(y);
                 }
+            }
+            
+            if constexpr (DEBUG_FIND_BRIDGE) {
+                if (x) std::cerr << "  New x: val=(" << x->val[lower].min().x() << ".." << x->val[lower].max().x() << "), isLeaf=" << isLeaf(x) << "\n";
+                if (y) std::cerr << "  New y: val=(" << y->val[lower].min().x() << ".." << y->val[lower].max().x() << "), isLeaf=" << isLeaf(y) << "\n";
             }
         }
         
         if (!x || !y) return Bridge();
-        return Bridge(x->val[lower].min(),y->val[lower].max());
+        
+        Bridge result = Bridge(x->val[lower].min(),y->val[lower].max());
+        if constexpr (DEBUG_FIND_BRIDGE) {
+            std::cerr << "Result: (" << result.min().x() << "," << result.min().y() << ") -> (" 
+                      << result.max().x() << "," << result.max().y() << ")\n";
+        }
+        return result;
     }
 
     void onUpdate(Node* x){
@@ -169,17 +228,36 @@ protected:
     inline
     Node* stepLeft(Node* v){
         auto x = v->val[lower].min().x();
+        if constexpr (DEBUG_FIND_BRIDGE) {
+            std::cerr << "    stepLeft: starting at val=(" << v->val[lower].min().x() << ".." << v->val[lower].max().x() << "), pivot x=" << x << "\n";
+        }
         v = v->left;
-        while(v && v->val[lower].max().x() > x) v = v->left;
+        while(v && v->val[lower].max().x() > x) {
+            if constexpr (DEBUG_FIND_BRIDGE) {
+                std::cerr << "    stepLeft: skipping node val=(" << v->val[lower].min().x() << ".." << v->val[lower].max().x() << ") because max.x > pivot\n";
+            }
+            v = v->left;
+        }
+        if constexpr (DEBUG_FIND_BRIDGE) {
+            if (v) std::cerr << "    stepLeft: landed at val=(" << v->val[lower].min().x() << ".." << v->val[lower].max().x() << ")\n";
+            else std::cerr << "    stepLeft: landed at null!\n";
+        }
         return v;
     }
 
     template<bool lower>
     inline
     Node* stepRight(Node* v){
-        auto x = v->val[lower].max().x();
+        // SIMPLIFIED: Just go to right child, no skipping
+        // The original skipping logic was incorrectly discarding valid hull points
+        if constexpr (DEBUG_FIND_BRIDGE) {
+            std::cerr << "    stepRight: from val=(" << v->val[lower].min().x() << ".." << v->val[lower].max().x() << ")";
+        }
         v = v->right;
-        while(v && v->val[lower].min().x() < x) v = v->right;
+        if constexpr (DEBUG_FIND_BRIDGE) {
+            if (v) std::cerr << " to val=(" << v->val[lower].min().x() << ".." << v->val[lower].max().x() << ")\n";
+            else std::cerr << " to null!\n";
+        }
         return v;
     }
 
@@ -452,15 +530,17 @@ private:
         if (!validateBridgesRecursive(node->right)) return false;
 
         // Recompute bridges and compare
-        Bridge lower = findBridge<false>(node);
-        Bridge upper = findBridge<true>(node);
+        // val[0] = findBridge<false> = upper bridge
+        // val[1] = findBridge<true> = lower bridge
+        Bridge upper = findBridge<false>(node);
+        Bridge lower = findBridge<true>(node);
         
-        if (node->val[0] != lower) {
-            std::cerr << "Lower Bridge mismatch! Stored: " << node->val[0] << ", Computed: " << lower << "\n";
+        if (node->val[0] != upper) {
+            std::cerr << "Upper Bridge mismatch! Stored: " << node->val[0] << ", Computed: " << upper << "\n";
             return false;
         }
-        if (node->val[1] != upper) {
-            std::cerr << "Upper Bridge mismatch! Stored: " << node->val[1] << ", Computed: " << upper << "\n";
+        if (node->val[1] != lower) {
+            std::cerr << "Lower Bridge mismatch! Stored: " << node->val[1] << ", Computed: " << lower << "\n";
             return false;
         }
         
