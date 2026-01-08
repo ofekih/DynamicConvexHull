@@ -4,6 +4,14 @@ target_link_libraries(test_convex_hull PRIVATE dch_lib GTest::gtest_main)
 add_executable(test_build_complexity test_build_complexity.cpp)
 target_link_libraries(test_build_complexity PRIVATE dch_lib GTest::gtest_main)
 
+add_executable(test_split_merge test_split_merge.cpp)
+target_link_libraries(test_split_merge PRIVATE dch_lib GTest::gtest_main)
+
+add_executable(test_split_debug test_split_debug.cpp)
+target_link_libraries(test_split_debug PRIVATE dch_lib GTest::gtest_main)
+
 include(GoogleTest)
 gtest_discover_tests(test_convex_hull)
 gtest_discover_tests(test_build_complexity)
+gtest_discover_tests(test_split_merge)
+gtest_discover_tests(test_split_debug)

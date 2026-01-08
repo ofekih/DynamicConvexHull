@@ -6,6 +6,7 @@
 #define DYNAMICCONVEXHULL_CHTREE_H
 
 #include <vector>
+#include <limits>
 #include <CGAL/enum.h>
 #include "AvlTree.h"
 #include "util.h"
@@ -13,7 +14,7 @@
 
 
 template<class Traits>
-class CHTree : AVLTree<Bridges<Traits>>{
+class CHTree : public AVLTree<Bridges<Traits>>{
 using Bridge = typename Traits::Segment_2;
 using Point = typename Traits::Point_2;
 using Node = typename AVLTree<Bridges<Traits>>::Node;
@@ -53,6 +54,10 @@ protected:
     Bridge findBridge(Node* v){
         Node* x = v->left;
         Node* y = v->right;
+        
+        // Safety check
+        if (!x || !y) return Bridge();
+
         Bridge e_l, e_r, lr;
         bool undecided;
 
@@ -60,6 +65,9 @@ protected:
 
         while (!(isLeaf(x) && isLeaf(y))) {
             undecided = true;
+            // Safety check for nulls during traversal
+            if (!x || !y) break;
+
             e_l = x->val[lower];
             e_r = y->val[lower];
             lr = Bridge(midpoint(e_l),midpoint(e_r));
@@ -77,6 +85,8 @@ protected:
                 }
             }
         }
+        
+        if (!x || !y) return Bridge();
         return Bridge(x->val[lower].min(),y->val[lower].max());
     }
 
@@ -345,6 +355,78 @@ private:
     }
 
 public:
+    // ========================================================================
+    // Split and Join (Merge) Operations
+    // ========================================================================
+    // 
+    // These operations allow splitting a convex hull into two parts and
+    // merging two disjoint hulls into one.
+    //
+    // Time Complexity: O(log² N) for both operations
+    // - O(log N) tree structure changes (AVL split/join)
+    // - O(log N) bridge recomputation per touched node (onUpdate callback)
+    //
+    // Based on the Eilice algorithm:
+    // "Simple and Robust Dynamic Two-Dimensional Convex Hull"
+    // by Gæde, Gørtz, van der Hoog, Krogh, Rotenberg (2023)
+    // ========================================================================
+
+    // Join (merge) another hull 'other' into this one.
+    // PRECONDITION: All points in 'this' must have x-coordinates < all points in 'other'.
+    //               The two hulls must cover disjoint x-ranges.
+    // After this operation, 'other' becomes empty.
+    // Time complexity: O(log² N) where N is the combined size
+    void join(CHTree& other) {
+        if (other.empty()) return;
+        if (this->empty()) {
+            this->root = other.root;
+            if (this->root) this->root->par = nullptr;  // Ensure clean parent
+            other.root = nullptr;
+            return;
+        }
+
+        // Use a point from the tree to create a dummy bridge.
+        // This dummy value will be maintained in the internal join node,
+        // but immediatley overwritten by onUpdate(x) calling findBridge.
+        // We do this to avoid the default behavior of AVLTree::join(AVLTree*)
+        // which removes a leaf from 'this' to use as a separator, causing data loss.
+        Point p = this->root ? this->root->val[0].min() : other.root->val[0].min();
+        Bridges<Traits> dummy = {Bridge(p, p), Bridge(p, p)};
+        
+        AVLTree<Bridges<Traits>>::join(dummy, &other);
+    }
+
+    // Split this hull into two parts at the given x-coordinate.
+    // After the operation:
+    //   - 'this' contains all points with x < splitX (strictly less)
+    //   - Returns a new CHTree containing points with x >= splitX
+    // If splitX matches an exact point, that point goes to the RIGHT tree.
+    // Time complexity: O(log² N) where N is the original size
+    CHTree split(double splitX) {
+        CHTree rightHull;
+        if (AVLTree<Bridges<Traits>>::root == nullptr) {
+            return rightHull;  // Empty tree, nothing to split
+        }
+        
+        // Create a dummy bridge for the split point.
+        // The AVLTree::split function splits such that:
+        //   - left tree gets values < k
+        //   - right tree gets values > k
+        //   - If k exists, it is deleted
+        // 
+        // For our use case, we want to split by x-coordinate.
+        // We create a point with the split x-coordinate and a very low y
+        // so it will compare correctly.
+        Point splitPoint(splitX, std::numeric_limits<double>::lowest());
+        Bridges<Traits> splitKey = {Bridge(splitPoint, splitPoint), Bridge(splitPoint, splitPoint)};
+        
+        // Perform the split - this modifies 'this' to contain < splitX
+        // and puts >= splitX into rightHull
+        AVLTree<Bridges<Traits>>::split(splitKey, &rightHull);
+        
+        return rightHull;
+    }
+
     // Get the number of points in the hull
     size_t size() const {
         return AVLTree<Bridges<Traits>>::root ? 
@@ -355,5 +437,35 @@ public:
     bool empty() const {
         return AVLTree<Bridges<Traits>>::root == nullptr;
     }
+
+    // DEBUG: Validate that all bridges are consistent with children
+    bool validateBridges() {
+        return validateBridgesRecursive(AVLTree<Bridges<Traits>>::root);
+    }
+
+private:
+    bool validateBridgesRecursive(Node* node) {
+        if (!node || isLeaf(node)) return true;
+        
+        // Recursively validate children first
+        if (!validateBridgesRecursive(node->left)) return false;
+        if (!validateBridgesRecursive(node->right)) return false;
+
+        // Recompute bridges and compare
+        Bridge lower = findBridge<false>(node);
+        Bridge upper = findBridge<true>(node);
+        
+        if (node->val[0] != lower) {
+            std::cerr << "Lower Bridge mismatch! Stored: " << node->val[0] << ", Computed: " << lower << "\n";
+            return false;
+        }
+        if (node->val[1] != upper) {
+            std::cerr << "Upper Bridge mismatch! Stored: " << node->val[1] << ", Computed: " << upper << "\n";
+            return false;
+        }
+        
+        return true;
+    }
+public:
 };
 #endif //DYNAMICCONVEXHULL_CHTREE_H
