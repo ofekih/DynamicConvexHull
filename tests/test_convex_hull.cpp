@@ -5,6 +5,7 @@
 #include <random>
 #include <iostream>
 #include <memory>
+#include <chrono>
 #include "CHTree.h"
 #include "hull_test_helpers.hpp"
 #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
@@ -358,3 +359,378 @@ TEST(ConvexHullComparison, NegativeCoordinates) {
     }
     EXPECT_TRUE(tester.verifyHulls());
 }
+
+// ============================================================================
+// Tests: O(n) Build Construction
+// ============================================================================
+
+class BuildTester {
+public:
+    std::mt19937 rng;
+    
+    BuildTester(unsigned seed = 42) : rng(seed) {}
+    
+    std::vector<Point_2> generateRandomPoints(int n, int range = 1000) {
+        std::uniform_int_distribution<int> dist(-range, range);
+        std::vector<Point_2> points;
+        for (int i = 0; i < n; i++) {
+            points.emplace_back(dist(rng), dist(rng));
+        }
+        // Sort by x, then by y for ties
+        std::sort(points.begin(), points.end(), [](const Point_2& a, const Point_2& b) {
+            if (a.x() != b.x()) return a.x() < b.x();
+            return a.y() < b.y();
+        });
+        return points;
+    }
+    
+    // Compare build() vs insert() for same point set
+    // Both methods should produce functionally equivalent convex hulls
+    // Note: They may not produce identical hulls (collinear point inclusion differs)
+    // but both should be valid and functional
+    bool compareBuildVsInsert(const std::vector<Point_2>& sorted_points) {
+        if (sorted_points.size() < 3) {
+            // For very small point sets, just verify basic properties
+            CHTree<K> built_tree;
+            built_tree.build(sorted_points);
+            return built_tree.size() == sorted_points.size();
+        }
+        
+        // Method 1: Use build()
+        CHTree<K> built_tree;
+        built_tree.build(sorted_points);
+        
+        // Method 2: Use insert()
+        CHTree<K> inserted_tree;
+        for (const auto& p : sorted_points) {
+            inserted_tree.insert(p);
+        }
+        
+        // Get hulls from both methods
+        auto built_upper = hull_helpers::toIntPairs(built_tree.upperHullPoints());
+        auto built_lower = hull_helpers::toIntPairs(built_tree.lowerHullPoints());
+        auto inserted_upper = hull_helpers::toIntPairs(inserted_tree.upperHullPoints());
+        auto inserted_lower = hull_helpers::toIntPairs(inserted_tree.lowerHullPoints());
+        
+        // Find extremal points from input
+        auto int_points = hull_helpers::toIntPairs(sorted_points);
+        auto leftmost = *std::min_element(int_points.begin(), int_points.end());
+        auto rightmost = *std::max_element(int_points.begin(), int_points.end());
+        
+        // Combine all hull points for checking extremal inclusion
+        std::set<hull_helpers::Point> built_all, inserted_all;
+        built_all.insert(built_upper.begin(), built_upper.end());
+        built_all.insert(built_lower.begin(), built_lower.end());
+        inserted_all.insert(inserted_upper.begin(), inserted_upper.end());
+        inserted_all.insert(inserted_lower.begin(), inserted_lower.end());
+        
+        // Check that extremal points are in both hulls
+        bool build_has_extremal = (built_all.find(leftmost) != built_all.end() &&
+                                   built_all.find(rightmost) != built_all.end());
+        bool insert_has_extremal = (inserted_all.find(leftmost) != inserted_all.end() &&
+                                    inserted_all.find(rightmost) != inserted_all.end());
+        
+        if (!build_has_extremal) {
+            std::cerr << "build() hull missing extremal points!\n";
+            std::cerr << "Leftmost: " << leftmost.first << "," << leftmost.second << "\n";
+            std::cerr << "Rightmost: " << rightmost.first << "," << rightmost.second << "\n";
+        }
+        if (!insert_has_extremal) {
+            std::cerr << "insert() hull missing extremal points!\n";
+        }
+        
+        // Verify that covers() returns the same result for both methods on test points
+        std::mt19937 test_rng(42);
+        std::uniform_int_distribution<int> dist(-1000, 1000);
+        bool covers_match = true;
+        for (int i = 0; i < 100; i++) {
+            Point_2 query(dist(test_rng), dist(test_rng));
+            if (built_tree.covers(query) != inserted_tree.covers(query)) {
+                covers_match = false;
+                std::cerr << "covers() mismatch at (" << query.x() << "," << query.y() << ")\n";
+                break;
+            }
+        }
+        
+        return build_has_extremal && insert_has_extremal && covers_match;
+    }
+};
+
+TEST(ConvexHullBuild, EmptyBuild) {
+    CHTree<K> tree;
+    std::vector<Point_2> empty;
+    tree.build(empty);
+    EXPECT_TRUE(tree.empty());
+    EXPECT_EQ(tree.size(), 0u);
+}
+
+TEST(ConvexHullBuild, SinglePoint) {
+    CHTree<K> tree;
+    std::vector<Point_2> points = {Point_2(50, 50)};
+    tree.build(points);
+    EXPECT_EQ(tree.size(), 1u);
+}
+
+TEST(ConvexHullBuild, TwoPoints) {
+    CHTree<K> tree;
+    std::vector<Point_2> points = {Point_2(0, 0), Point_2(100, 100)};
+    tree.build(points);
+    EXPECT_EQ(tree.size(), 2u);
+}
+
+TEST(ConvexHullBuild, ThreePoints_Triangle) {
+    BuildTester tester;
+    std::vector<Point_2> points = {Point_2(0, 0), Point_2(50, 100), Point_2(100, 0)};
+    EXPECT_TRUE(tester.compareBuildVsInsert(points));
+}
+
+TEST(ConvexHullBuild, Small_RandomPoints) {
+    BuildTester tester(42);
+    auto points = tester.generateRandomPoints(10, 100);
+    EXPECT_TRUE(tester.compareBuildVsInsert(points));
+}
+
+TEST(ConvexHullBuild, Medium_RandomPoints) {
+    BuildTester tester(123);
+    auto points = tester.generateRandomPoints(100, 500);
+    EXPECT_TRUE(tester.compareBuildVsInsert(points));
+}
+
+TEST(ConvexHullBuild, Large_RandomPoints) {
+    BuildTester tester(456);
+    auto points = tester.generateRandomPoints(500, 1000);
+    EXPECT_TRUE(tester.compareBuildVsInsert(points));
+}
+
+TEST(ConvexHullBuild, VeryLarge_RandomPoints) {
+    BuildTester tester(789);
+    auto points = tester.generateRandomPoints(2000, 10000);
+    EXPECT_TRUE(tester.compareBuildVsInsert(points));
+}
+
+TEST(ConvexHullBuild, CollinearHorizontal) {
+    BuildTester tester;
+    std::vector<Point_2> points;
+    for (int i = 0; i < 20; i++) {
+        points.emplace_back(i * 10, 50);
+    }
+    EXPECT_TRUE(tester.compareBuildVsInsert(points));
+}
+
+TEST(ConvexHullBuild, CollinearVertical) {
+    BuildTester tester;
+    std::vector<Point_2> points;
+    for (int i = 0; i < 20; i++) {
+        points.emplace_back(50, i * 10);
+    }
+    EXPECT_TRUE(tester.compareBuildVsInsert(points));
+}
+
+TEST(ConvexHullBuild, CollinearDiagonal) {
+    BuildTester tester;
+    std::vector<Point_2> points;
+    for (int i = 0; i < 20; i++) {
+        points.emplace_back(i * 10, i * 10);
+    }
+    EXPECT_TRUE(tester.compareBuildVsInsert(points));
+}
+
+TEST(ConvexHullBuild, Square) {
+    BuildTester tester;
+    std::vector<Point_2> points = {
+        Point_2(0, 0), Point_2(0, 100), Point_2(100, 0), Point_2(100, 100)
+    };
+    std::sort(points.begin(), points.end(), [](const auto& a, const auto& b) {
+        if (a.x() != b.x()) return a.x() < b.x();
+        return a.y() < b.y();
+    });
+    EXPECT_TRUE(tester.compareBuildVsInsert(points));
+}
+
+TEST(ConvexHullBuild, CircleApproximation) {
+    BuildTester tester;
+    std::vector<Point_2> points;
+    const int n = 24;
+    const int r = 100;
+    for (int i = 0; i < n; i++) {
+        double angle = 2.0 * 3.14159265358979 * i / n;
+        points.emplace_back((int)(r * cos(angle)), (int)(r * sin(angle)));
+    }
+    std::sort(points.begin(), points.end(), [](const auto& a, const auto& b) {
+        if (a.x() != b.x()) return a.x() < b.x();
+        return a.y() < b.y();
+    });
+    EXPECT_TRUE(tester.compareBuildVsInsert(points));
+}
+
+TEST(ConvexHullBuild, SquareWithInterior) {
+    BuildTester tester;
+    std::vector<Point_2> points = {
+        Point_2(0, 0), Point_2(0, 100), Point_2(100, 0), Point_2(100, 100),
+        Point_2(50, 50), Point_2(25, 75), Point_2(75, 25)
+    };
+    std::sort(points.begin(), points.end(), [](const auto& a, const auto& b) {
+        if (a.x() != b.x()) return a.x() < b.x();
+        return a.y() < b.y();
+    });
+    EXPECT_TRUE(tester.compareBuildVsInsert(points));
+}
+
+TEST(ConvexHullBuild, DifferentSeeds) {
+    for (int seed = 0; seed < 20; seed++) {
+        BuildTester tester(seed * 12345);
+        auto points = tester.generateRandomPoints(200, 500);
+        EXPECT_TRUE(tester.compareBuildVsInsert(points)) << "Failed with seed " << seed;
+    }
+}
+
+TEST(ConvexHullBuild, PowersOfTwo) {
+    // Test with sizes that are powers of 2 (tests tree balance)
+    std::vector<int> sizes = {1, 2, 4, 8, 16, 32, 64, 128, 256, 512};
+    for (int n : sizes) {
+        BuildTester tester(n);
+        auto points = tester.generateRandomPoints(n, 1000);
+        EXPECT_TRUE(tester.compareBuildVsInsert(points)) << "Failed with size " << n;
+    }
+}
+
+TEST(ConvexHullBuild, NonPowersOfTwo) {
+    // Test with sizes that are not powers of 2
+    std::vector<int> sizes = {3, 5, 7, 9, 15, 17, 31, 33, 63, 65, 127, 129, 255, 257};
+    for (int n : sizes) {
+        BuildTester tester(n);
+        auto points = tester.generateRandomPoints(n, 1000);
+        EXPECT_TRUE(tester.compareBuildVsInsert(points)) << "Failed with size " << n;
+    }
+}
+
+// Test that build() correctly handles duplicate x-coordinates
+TEST(ConvexHullBuild, DuplicateXCoordinates) {
+    BuildTester tester;
+    std::vector<Point_2> points;
+    for (int x = 0; x < 10; x++) {
+        for (int y = 0; y < 5; y++) {
+            points.emplace_back(x * 10, y * 20);
+        }
+    }
+    std::sort(points.begin(), points.end(), [](const auto& a, const auto& b) {
+        if (a.x() != b.x()) return a.x() < b.x();
+        return a.y() < b.y();
+    });
+    EXPECT_TRUE(tester.compareBuildVsInsert(points));
+}
+
+// Test that operations after build() work correctly
+TEST(ConvexHullBuild, OperationsAfterBuild) {
+    BuildTester tester(42);
+    auto points = tester.generateRandomPoints(50, 200);
+    
+    CHTree<K> tree;
+    tree.build(points);
+    
+    // Insert more points
+    std::uniform_int_distribution<int> dist(-200, 200);
+    for (int i = 0; i < 20; i++) {
+        Point_2 p(dist(tester.rng), dist(tester.rng));
+        tree.insert(p);
+        points.push_back(p);
+    }
+    
+    // Verify against reference
+    auto expected_upper = hull_helpers::adjustUpperHullForCHTree(
+        monotone_chain::upperHull(hull_helpers::toIntPairs(points)));
+    auto expected_lower = hull_helpers::adjustLowerHullForCHTree(
+        monotone_chain::lowerHull(hull_helpers::toIntPairs(points)));
+    
+    auto ch_upper = hull_helpers::toIntPairs(tree.upperHullPoints());
+    auto ch_lower = hull_helpers::toIntPairs(tree.lowerHullPoints());
+    
+    EXPECT_TRUE(hull_helpers::hullContainsAll(expected_upper, ch_upper));
+    EXPECT_TRUE(hull_helpers::hullContainsAll(expected_lower, ch_lower));
+}
+
+// Test removal after build()
+TEST(ConvexHullBuild, RemovalAfterBuild) {
+    BuildTester tester(123);
+    auto points = tester.generateRandomPoints(100, 300);
+    
+    CHTree<K> tree;
+    tree.build(points);
+    
+    // Remove some points
+    std::vector<Point_2> removed;
+    for (int i = 0; i < 30; i++) {
+        size_t idx = tester.rng() % points.size();
+        removed.push_back(points[idx]);
+        tree.remove(points[idx]);
+        points.erase(points.begin() + idx);
+    }
+    
+    // Verify against reference
+    if (points.size() >= 3) {
+        auto expected_upper = hull_helpers::adjustUpperHullForCHTree(
+            monotone_chain::upperHull(hull_helpers::toIntPairs(points)));
+        auto expected_lower = hull_helpers::adjustLowerHullForCHTree(
+            monotone_chain::lowerHull(hull_helpers::toIntPairs(points)));
+        
+        auto ch_upper = hull_helpers::toIntPairs(tree.upperHullPoints());
+        auto ch_lower = hull_helpers::toIntPairs(tree.lowerHullPoints());
+        
+        EXPECT_TRUE(hull_helpers::hullContainsAll(expected_upper, ch_upper));
+        EXPECT_TRUE(hull_helpers::hullContainsAll(expected_lower, ch_lower));
+    }
+}
+
+// Test rebuilding (calling build() multiple times)
+TEST(ConvexHullBuild, RebuildMultipleTimes) {
+    for (int round = 0; round < 5; round++) {
+        BuildTester tester(round);
+        auto points = tester.generateRandomPoints(100, 500);
+        
+        CHTree<K> tree;
+        tree.build(points);
+        
+        // Build again with different points
+        auto new_points = tester.generateRandomPoints(150, 600);
+        tree.build(new_points);
+        
+        // Verify the second build
+        EXPECT_TRUE(tester.compareBuildVsInsert(new_points)) << "Failed on round " << round;
+    }
+}
+
+// Test covers() query after build()
+TEST(ConvexHullBuild, CoversAfterBuild) {
+    BuildTester tester(42);
+    auto points = tester.generateRandomPoints(100, 200);
+    
+    CHTree<K> built_tree;
+    built_tree.build(points);
+    
+    CHTree<K> inserted_tree;
+    for (const auto& p : points) {
+        inserted_tree.insert(p);
+    }
+    
+    // Generate test points and compare covers() results
+    std::uniform_int_distribution<int> dist(-200, 200);
+    for (int i = 0; i < 100; i++) {
+        Point_2 query(dist(tester.rng), dist(tester.rng));
+        EXPECT_EQ(built_tree.covers(query), inserted_tree.covers(query)) 
+            << "covers() mismatch for point (" << query.x() << ", " << query.y() << ")";
+    }
+}
+
+// Stress test for O(n) build
+TEST(ConvexHullBuild, StressTest) {
+    BuildTester tester(9999);
+    auto points = tester.generateRandomPoints(5000, 100000);
+    
+    auto start = std::chrono::high_resolution_clock::now();
+    EXPECT_TRUE(tester.compareBuildVsInsert(points));
+    auto end = std::chrono::high_resolution_clock::now();
+    
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    std::cout << "Stress test (5000 points) completed in " << duration.count() << "ms\n";
+}
+

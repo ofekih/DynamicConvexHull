@@ -349,6 +349,56 @@ protected:
         if(x) return x->size;
         return 0;
     }
+
+public:
+    // Clear all nodes and reset the tree
+    void clear() {
+        delete root;
+        root = nullptr;
+    }
+
+    // Build a balanced AVL tree from a sorted vector in O(n) time.
+    // The vector MUST be sorted according to the Comparator.
+    // This replaces any existing tree content.
+    void buildFromSorted(const std::vector<T>& sorted) {
+        clear();
+        if (sorted.empty()) return;
+        root = buildFromSortedRecursive(sorted, 0, sorted.size());
+    }
+
+protected:
+    // Recursive helper that builds a subtree from sorted[start..end)
+    // Returns the root of the subtree.
+    // For a leaf-oriented AVL tree: internal nodes store "bridges" computed from children,
+    // and leaves store the actual data.
+    Node* buildFromSortedRecursive(const std::vector<T>& sorted, size_t start, size_t end) {
+        if (start >= end) return nullptr;
+        
+        if (end - start == 1) {
+            // Base case: single element becomes a leaf
+            Node* leaf = new Node(sorted[start]);
+            return leaf;
+        }
+        
+        // Internal node: pick median point for balanced split
+        size_t mid = start + (end - start) / 2;
+        
+        // Create an internal node (its val will be computed by onUpdate)
+        Node* node = new Node(sorted[mid]); // Temporary value, will be updated
+        
+        // Recursively build left and right subtrees
+        node->left = buildFromSortedRecursive(sorted, start, mid);
+        node->right = buildFromSortedRecursive(sorted, mid, end);
+        
+        // Set parent pointers
+        if (node->left) node->left->par = node;
+        if (node->right) node->right->par = node;
+        
+        // Update node data (height, size, min, max, and call onUpdate for bridges)
+        updateData(node);
+        
+        return node;
+    }
 };
 
 #endif //DYNAMICCONVEXHULL_AVLTREE_H
