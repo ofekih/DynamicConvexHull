@@ -7,6 +7,7 @@
 
 #include <vector>
 #include <limits>
+#include <cmath>
 #include <CGAL/enum.h>
 #include "AvlTree.h"
 #include "util.h"
@@ -248,15 +249,20 @@ protected:
     template<bool lower>
     inline
     Node* stepRight(Node* v){
-        // SIMPLIFIED: Just go to right child, no skipping
-        // The original skipping logic was incorrectly discarding valid hull points
+        auto x = v->val[lower].max().x();
         if constexpr (DEBUG_FIND_BRIDGE) {
-            std::cerr << "    stepRight: from val=(" << v->val[lower].min().x() << ".." << v->val[lower].max().x() << ")";
+            std::cerr << "    stepRight: starting at val=(" << v->val[lower].min().x() << ".." << v->val[lower].max().x() << "), pivot x=" << x << "\n";
         }
         v = v->right;
+        while(v && v->val[lower].min().x() < x) {
+            if constexpr (DEBUG_FIND_BRIDGE) {
+                std::cerr << "    stepRight: skipping node val=(" << v->val[lower].min().x() << ".." << v->val[lower].max().x() << ") because min.x < pivot\n";
+            }
+            v = v->right;
+        }
         if constexpr (DEBUG_FIND_BRIDGE) {
-            if (v) std::cerr << " to val=(" << v->val[lower].min().x() << ".." << v->val[lower].max().x() << ")\n";
-            else std::cerr << " to null!\n";
+            if (v) std::cerr << "    stepRight: landed at val=(" << v->val[lower].min().x() << ".." << v->val[lower].max().x() << ")\n";
+            else std::cerr << "    stepRight: landed at null!\n";
         }
         return v;
     }

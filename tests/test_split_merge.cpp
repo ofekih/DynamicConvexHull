@@ -720,7 +720,7 @@ TEST(SplitMerge, JoinManySmallHulls) {
         auto hull = std::make_unique<CHTree<K>>();
         std::vector<Point_2> pts;
         for (int j = 0; j < 10; j++) {
-            Point_2 p(i * 100 + j * 5, rng() % 100 - 50);
+            Point_2 p(i * 100 + j * 5, (int)(rng() % 100) - 50);
             pts.push_back(p);
             allPoints.push_back(p);
         }
@@ -827,8 +827,8 @@ TEST(SplitMerge, OperationsAfterJoin) {
     std::vector<Point_2> leftPoints, rightPoints;
     
     for (int i = 0; i < 20; i++) {
-        leftPoints.emplace_back(-100 + i * 4, rng() % 100 - 50);
-        rightPoints.emplace_back(100 + i * 4, rng() % 100 - 50);
+        leftPoints.emplace_back(-100 + i * 4, (int)(rng() % 100) - 50);
+        rightPoints.emplace_back(100 + i * 4, (int)(rng() % 100) - 50);
     }
     std::sort(leftPoints.begin(), leftPoints.end(), [](const auto& a, const auto& b) {
         if (a.x() != b.x()) return a.x() < b.x();
