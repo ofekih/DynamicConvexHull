@@ -223,9 +223,7 @@ VerificationResult verifyStabbingLineQuery(const std::vector<Point_2>& points,
         std::cout << "DEBUG: Sorted points (" << sortedPoints.size() << "): ";
         for (const auto& p : sortedPoints) std::cout << "(" << p.x() << "," << p.y() << ") ";
         std::cout << "\n";
-        std::cout << "DEBUG: SLS points (" << sls.getOriginalPoints().size() << "): ";
-        for (const auto& p : sls.getOriginalPoints()) std::cout << "(" << p.x() << "," << p.y() << ") ";
-        std::cout << "\n";
+        std::cout << "DEBUG: SLS size: " << sls.size() << "\n";
         std::cout << "DEBUG: epsilon = " << epsilon << "\n";
     }
     
@@ -241,13 +239,13 @@ VerificationResult verifyStabbingLineQuery(const std::vector<Point_2>& points,
         auto [ok, m, b] = hpi.findLine();
         if (ok) {
             std::cout << "DEBUG: Reference found line: y = " << m << "x + " << b << "\n";
-            // Check if algorithm's checkSlope would find this valid
+            // Check feasibility with sorted points
             double bMin = -1e308, bMax = 1e308;
-            for (const auto& p : sls.getOriginalPoints()) {
+            for (const auto& p : sortedPoints) {
                 bMin = std::max(bMin, p.y() - epsilon - m * p.x());
                 bMax = std::min(bMax, p.y() + epsilon - m * p.x());
             }
-            std::cout << "DEBUG: Algorithm bMin=" << bMin << ", bMax=" << bMax 
+            std::cout << "DEBUG: bMin=" << bMin << ", bMax=" << bMax 
                       << ", gap=" << (bMax - bMin) << "\n";
         }
     }
