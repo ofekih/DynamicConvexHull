@@ -34,8 +34,8 @@ def main():
             print("Could not recover JSON data.")
             sys.exit(1)
 
-    print(f"{'Benchmark':<30} | {'N':<8} | {'Time (ns)':<12} | {'T/N':<10} | {'T/N^2':<10} | {'T/N^3':<10} | {'T/log^2N':<10}")
-    print("-" * 110)
+    print(f"{'Benchmark':<30} | {'N':<8} | {'Time (ns)':<12} | {'T/N':<10} | {'T/logN':<10} | {'T/log^2N':<10}")
+    print("-" * 100)
 
     for bm in data['benchmarks']:
         name = bm['name']
@@ -53,13 +53,12 @@ def main():
         if n > 1:
             log_n = math.log2(n)
             t_n = time_ns / n
-            t_n2 = time_ns / (n**2)
-            t_n3 = time_ns / (n**3)
+            t_logn = time_ns / log_n
             t_log2n = time_ns / (log_n ** 2)
         else:
-            t_n = t_n2 = t_n3 = t_log2n = 0
+            t_n = t_logn = t_log2n = 0
 
-        print(f"{name:<30} | {n:<8} | {time_ns:<12.2f} | {t_n:<10.2f} | {t_n2:<10.2f} | {t_n3:<10.2f} | {t_log2n:<10.2f}")
+        print(f"{name:<30} | {n:<8} | {time_ns:<12.2f} | {t_n:<10.2f} | {t_logn:<10.2f} | {t_log2n:<10.2f}")
         
     print("\nInterpretation:")
     print("If T/f(N) is roughly constant as N increases, then Time ~ O(f(N)).")

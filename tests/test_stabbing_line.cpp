@@ -1030,3 +1030,268 @@ int main(int argc, char** argv) {
     return RUN_ALL_TESTS();
 }
 
+// ============================================================================
+// RANDOMIZED SPLIT/JOIN STRESS TEST
+// ============================================================================
+
+struct TestInstance {
+    int id;
+    SLS sls;
+    std::vector<Point_2> points;
+    double minX, maxX;
+    
+    TestInstance(int i, double eps) : id(i), sls(eps), minX(1e9), maxX(-1e9) {}
+    
+    void addPoint(const Point_2& p) {
+        points.push_back(p);
+        sls.insert(p);
+        minX = std::min(minX, p.x());
+        maxX = std::max(maxX, p.x());
+    }
+    
+    void removePoint(size_t idx) {
+        if (idx >= points.size()) return;
+        Point_2 p = points[idx];
+        sls.remove(p);
+        points.erase(points.begin() + idx);
+        
+        // Recompute bounds
+        minX = 1e9; maxX = -1e9;
+        for (const auto& pt : points) {
+            minX = std::min(minX, pt.x());
+            maxX = std::max(maxX, pt.x());
+        }
+    }
+    
+    // Sort points for easier splitting/verification
+    void sortPoints() {
+        std::sort(points.begin(), points.end(), 
+            [](const Point_2& a, const Point_2& b) {
+                if (a.x() != b.x()) return a.x() < b.x();
+                return a.y() < b.y();
+            });
+    }
+};
+
+TEST(StabbingLineRigorous, RandomizedSplitJoinStressTest) {
+    std::mt19937 rng(4242);
+    std::uniform_real_distribution<double> coordDist(0, 1000);
+    std::uniform_real_distribution<double> noiseDist(-1.0, 1.0);
+    std::uniform_int_distribution<int> opDist(0, 3); // 0: Insert, 1: Remove, 2: Split, 3: Join
+    
+    double epsilon = 1.0;
+    std::vector<std::unique_ptr<TestInstance>> forest;
+    int nextId = 0;
+    
+    // Create initial tree
+    forest.push_back(std::make_unique<TestInstance>(nextId++, epsilon));
+    
+    int numOps = 1000;
+    
+    for (int op = 0; op < numOps; ++op) {
+        int action = opDist(rng);
+        if (forest.empty()) action = 0; // Force insert if empty
+        
+        // Pick random tree
+        int treeIdx = std::uniform_int_distribution<int>(0, forest.size() - 1)(rng);
+        auto& instance = *forest[treeIdx];
+        
+        if (action == 0) { // INSERT
+            double x = coordDist(rng);
+            double y = x + noiseDist(rng) * 5.0; // Loosely linear
+            instance.addPoint(Point_2(x, y));
+            
+        } else if (action == 1) { // REMOVE
+            if (!instance.points.empty()) {
+                size_t idx = std::uniform_int_distribution<size_t>(0, instance.points.size() - 1)(rng);
+                instance.removePoint(idx);
+            }
+            
+        } else if (action == 2) { // SPLIT
+            if (instance.points.size() > 1) {
+                instance.sortPoints();
+                double splitX = (instance.minX + instance.maxX) / 2.0;
+                
+                // Perform split
+                auto rightSLS = instance.sls.split(splitX);
+                
+                // Create new instance for right part
+                auto rightInstance = std::make_unique<TestInstance>(nextId++, epsilon);
+                rightInstance->sls = std::move(rightSLS);
+                
+                // Distribute points manually to match logic
+                std::vector<Point_2> leftPoints;
+                std::vector<Point_2> rightPoints;
+                
+                instance.minX = 1e9; instance.maxX = -1e9;
+                rightInstance->minX = 1e9; rightInstance->maxX = -1e9;
+
+                for (const auto& p : instance.points) {
+                    if (p.x() > splitX) {
+                        rightPoints.push_back(p);
+                        rightInstance->minX = std::min(rightInstance->minX, p.x());
+                        rightInstance->maxX = std::max(rightInstance->maxX, p.x());
+                    } else {
+                        leftPoints.push_back(p);
+                        instance.minX = std::min(instance.minX, p.x());
+                        instance.maxX = std::max(instance.maxX, p.x());
+                    }
+                }
+                
+                instance.points = leftPoints;
+                rightInstance->points = rightPoints;
+            
+                forest.push_back(std::move(rightInstance));
+            }
+            
+        } else if (action == 3) { // JOIN
+            // Find another compatible tree (disjoint x-ranges)
+            int bestOtherIdx = -1;
+            for (size_t i = 0; i < forest.size(); ++i) {
+                if (i == (size_t)treeIdx) continue;
+                // Check disjoint
+                if (forest[i]->maxX < instance.minX || forest[i]->minX > instance.maxX) {
+                    bestOtherIdx = i;
+                    break;
+                }
+            }
+            
+            if (bestOtherIdx != -1) {
+                auto& other = *forest[bestOtherIdx];
+                bool instanceIsLeft = instance.maxX < other.minX;
+                
+                if (instanceIsLeft) {
+                    instance.sls.join(other.sls);
+                    instance.points.insert(instance.points.end(), other.points.begin(), other.points.end());
+                    instance.maxX = std::max(instance.maxX, other.maxX);
+                } else {
+                    other.sls.join(instance.sls);
+                    other.points.insert(other.points.end(), instance.points.begin(), instance.points.end());
+                    other.maxX = std::max(other.maxX, instance.maxX);
+                    // Move other to instance position (semantically keep 'instance' alive or swap)
+                    // Let's keep 'other' as the result and remove 'instance'
+                    treeIdx = bestOtherIdx; // Update active index ref
+                }
+                
+                // Remove the merged-from tree
+                if (instanceIsLeft) {
+                     forest.erase(forest.begin() + bestOtherIdx);
+                } else {
+                     forest.erase(forest.begin() + treeIdx);
+                }
+            }
+        }
+        
+        // VERIFY random subset of forest
+        for (const auto& ptr : forest) {
+             // Only verify 10% of trees per step to keep it fast, or all if small
+             if (rng() % 10 != 0 && forest.size() > 5) continue;
+             if (ptr->points.empty()) continue;
+
+             VerificationResult res = verifyStabbingLineQuery(ptr->points, epsilon);
+             EXPECT_TRUE(res.passed()) << "Op " << op << " Tree " << ptr->id << ": " << res.details;
+             if (!res.passed()) return; // Stop on first failure
+        }
+        
+        // Clean up empty trees occasionally
+        if (op % 100 == 0) {
+            auto it = std::remove_if(forest.begin(), forest.end(), 
+                [](const auto& ptr) { return ptr->points.empty(); });
+            forest.erase(it, forest.end());
+            if (forest.empty()) forest.push_back(std::make_unique<TestInstance>(nextId++, epsilon));
+        }
+    }
+}
+
+// ============================================================================
+// LARGE SCALE TESTS
+// ============================================================================
+
+TEST(StabbingLineRigorous, LargeRandomizedExists) {
+    std::mt19937 rng(12345);
+    std::uniform_real_distribution<double> startDist(0, 100);
+    std::uniform_real_distribution<double> slopeDist(-5, 5);
+    std::uniform_real_distribution<double> noiseDist(-0.9, 0.9); // < epsilon=1.0
+    
+    int N = 10000;
+    double epsilon = 1.0;
+    
+    SLS sls(epsilon);
+    std::vector<Point_2> points;
+    points.reserve(N);
+    
+    double m = slopeDist(rng);
+    double b = startDist(rng);
+    
+    for (int i = 0; i < N; ++i) {
+        double x = i * 0.1;
+        double y = m * x + b + noiseDist(rng);
+        points.emplace_back(x, y);
+    }
+    
+    // Sort and build
+    sls.build(points);
+    
+    EXPECT_TRUE(sls.hasStabbingLine());
+    auto line = sls.findStabbingLine();
+    ASSERT_TRUE(line.has_value());
+    
+    // Verify O(N)
+    bool covered = verifyLineCoversAllPoints(points, *line, epsilon);
+    EXPECT_TRUE(covered);
+}
+
+TEST(StabbingLineRigorous, LargeRandomizedImpossible) {
+    std::mt19937 rng(67890);
+    std::uniform_real_distribution<double> dist(0, 1000);
+    
+    int N = 10000;
+    double epsilon = 1.0;
+    SLS sls(epsilon);
+    std::vector<Point_2> points;
+    
+    // Points scattered in a large box - impossible for small epsilon
+    for (int i = 0; i < N; ++i) {
+        points.emplace_back(dist(rng), dist(rng));
+    }
+    
+    // Sort and build
+    std::sort(points.begin(), points.end(), 
+        [](const Point_2& a, const Point_2& b) {
+            return a.x() < b.x(); 
+        });
+    sls.build(points);
+    
+    EXPECT_FALSE(sls.hasStabbingLine());
+}
+
+TEST(StabbingLineRigorous, LargeDynamicOutlier) {
+    std::mt19937 rng(111);
+    std::uniform_real_distribution<double> noiseDist(-0.5, 0.5);
+    
+    int N = 5000;
+    double epsilon = 1.0;
+    SLS sls(epsilon);
+    std::vector<Point_2> points;
+    
+    // Construct valid set
+    for (int i = 0; i < N; ++i) {
+        double x = i;
+        double y = x + noiseDist(rng);
+        points.emplace_back(x, y);
+    }
+    
+    sls.build(points);
+    EXPECT_TRUE(sls.hasStabbingLine());
+    
+    // Add "Killer" outlier
+    Point_2 killer(N/2.0, N*2.0); // Way off
+    sls.insert(killer);
+    
+    EXPECT_FALSE(sls.hasStabbingLine());
+    
+    // Remove killer
+    sls.remove(killer);
+    EXPECT_TRUE(sls.hasStabbingLine());
+}
+
