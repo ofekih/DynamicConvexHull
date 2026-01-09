@@ -84,29 +84,26 @@ BENCHMARK(BM_Build)
     ->Range(64, 1 << 18)
     ->Complexity();
 
-// Benchmark: single insert
-static void BM_Insert(benchmark::State& state) {
+// Benchmark: amortized insert (incremental build)
+static void BM_InsertAmortized(benchmark::State& state) {
     const int n = state.range(0);
     auto points = generateNearLinePoints(n);
     
     for (auto _ : state) {
-        state.PauseTiming();
         SLS sls(0.5);
-        for (int i = 0; i < n - 1; ++i) {
-            sls.insert(points[i]);
+        for (const auto& p : points) {
+            sls.insert(p);
         }
-        state.ResumeTiming();
-        
-        // Time just the last insert
-        sls.insert(points.back());
         benchmark::DoNotOptimize(sls);
     }
     
     state.SetComplexityN(n);
+    // Metrics: Time per insert = Time / N
+    state.SetItemsProcessed(state.iterations() * n);
 }
-BENCHMARK(BM_Insert)
+BENCHMARK(BM_InsertAmortized)
     ->RangeMultiplier(2)
-    ->Range(64, 1 << 14)
+    ->Range(64, 4096)
     ->Complexity();
 
 // Benchmark: getMinimumGap

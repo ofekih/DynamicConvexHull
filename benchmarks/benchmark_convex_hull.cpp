@@ -214,7 +214,9 @@ static void BM_MixedOperations(benchmark::State& state) {
             // Remove
             size_t idx = rng() % points.size();
             tree.remove(points[idx]);
-            points.erase(points.begin() + idx);
+            // O(1) removal from vector to avoid dominating the benchmark
+            std::swap(points[idx], points.back());
+            points.pop_back();
         } else {
             // Insert
             Point_2 p(dist(rng), dist(rng));
