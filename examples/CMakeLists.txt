@@ -1,0 +1,2 @@
+add_executable(stabbing_line_demo stabbing_line_demo.cpp)
+target_link_libraries(stabbing_line_demo PRIVATE dch_lib)
