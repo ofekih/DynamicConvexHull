@@ -1,6 +1,15 @@
-//
-// Created by etoga on 4/11/23.
-//
+/**
+ * @file AvlTree.h
+ * @brief Leaf-oriented AVL tree with split and join operations.
+ * 
+ * This AVL tree stores values only at leaves. Internal nodes store aggregate
+ * information (min, max) and support efficient split/join operations.
+ * 
+ * Time Complexities:
+ *   - insert/remove: O(log n)
+ *   - split/join: O(log n)
+ *   - buildFromSorted: O(n)
+ */
 
 #ifndef DYNAMICCONVEXHULL_AVLTREE_H
 #define DYNAMICCONVEXHULL_AVLTREE_H
@@ -8,15 +17,22 @@
 #include <algorithm>
 #include <iostream>
 #include <vector>
-#include <vector>
 
 using uint = unsigned int;
 
+/**
+ * @brief Leaf-oriented AVL tree with split/join support.
+ * @tparam T Value type stored in leaves.
+ * @tparam Comparator Comparison functor for ordering.
+ */
 template<class T, typename Comparator = std::less<T>>
 class AVLTree{
     Comparator less;
 
 public:
+    /**
+     * @brief Tree node storing value and aggregate information.
+     */
     struct Node{
         Node *left = nullptr, *right = nullptr, *par = nullptr;
         uint size = 1;
@@ -24,24 +40,20 @@ public:
         T val, min, max;
 
         Node() = default;
+        explicit Node(T v) : val(v), min(v), max(v) {}
 
-        explicit Node(T v) : val(v),min(v),max(v) {};
-
-        // Deletion of entire subtree
         ~Node(){
             delete left;
             delete right;
         }
 
-        inline
-        void makeLeftChild(Node* p){
+        inline void makeLeftChild(Node* p){
             if(!p) return;
             p->par = this;
             left = p;
         }
 
-        inline
-        void makeRightChild(Node* p){
+        inline void makeRightChild(Node* p){
             if(!p) return;
             p->par = this;
             right = p;
@@ -50,18 +62,16 @@ public:
 
     Node* root = nullptr;
 
-    // Default constructor
     AVLTree() = default;
     
-    // Destructor
     ~AVLTree(){
         delete root;
     }
     
-    // Deep copy constructor - creates a complete independent copy of the tree
+    /** @brief Deep copy constructor. */
     AVLTree(const AVLTree& other) : root(deepCopyNode(other.root)) {}
     
-    // Deep copy assignment operator
+    /** @brief Deep copy assignment. */
     AVLTree& operator=(const AVLTree& other) {
         if (this != &other) {
             delete root;
@@ -71,7 +81,6 @@ public:
     }
     
 private:
-    // Helper to recursively deep copy a node and its subtree
     static Node* deepCopyNode(const Node* node) {
         if (!node) return nullptr;
         Node* copy = new Node(node->val);
@@ -89,12 +98,12 @@ private:
 public:
     Node* getRoot() const { return root; }
     
-    // Move constructor
+    /** @brief Move constructor. */
     AVLTree(AVLTree&& other) noexcept : root(other.root) {
         other.root = nullptr;
     }
     
-    // Move assignment operator
+    /** @brief Move assignment. */
     AVLTree& operator=(AVLTree&& other) noexcept {
         if (this != &other) {
             delete root;
@@ -104,6 +113,7 @@ public:
         return *this;
     }
 
+    /** @brief Insert a value. O(log n) */
     void insert(T val){
         Node* parent = nullptr;
         Node* current = root;
@@ -111,7 +121,7 @@ public:
             onVisit(current);
             parent = current;
             if(isLeaf(current)) break;
-            else if(less(val,current->right->min)) current = current->left;
+            else if(less(val, current->right->min)) current = current->left;
             else current = current->right;
         }
         Node* inserted = new Node(val);
@@ -133,6 +143,7 @@ public:
         retrace(parent, true, false);
     }
 
+    /** @brief Remove a value. O(log n) */
     void remove(T val){
         Node* parent;
         Node* current = root;
@@ -143,7 +154,7 @@ public:
             else if(less(val, current->right->min)) current = current->left;
             else current = current->right;
         }
-        if(!current || current->val != val) return; // Val not found
+        if(!current || current->val != val) return;
         if(current == root){
             delete current;
             root = nullptr;
@@ -168,12 +179,17 @@ public:
         retrace(sibling, false, false);
     }
 
+    /**
+     * @brief Join with another tree using a pivot value.
+     * @param k Pivot value to use as separator.
+     * @param r Tree to join (becomes empty after operation).
+     */
     void join(T k, AVLTree* r){
         Node* tl = root;
         Node* tr = r->root;
         Node* x = new Node(k);
-        if(height(tl) > height(tr)+1) joinRight(root,x, r->root);
-        else if(height(tr) > height(tl)+1) joinLeft(root,x,r->root);
+        if(height(tl) > height(tr)+1) joinRight(root, x, r->root);
+        else if(height(tr) > height(tl)+1) joinLeft(root, x, r->root);
         else {
            x->makeLeftChild(tl);
            x->makeRightChild(tr);
@@ -184,25 +200,21 @@ public:
         r->root = nullptr;
     }
 
+    /**
+     * @brief Join with another tree using an existing node as pivot.
+     */
     void join(Node* k, AVLTree* r) {
         Node *tl = root;
         Node *tr = r->root;
         Node *x = k;
         
-        // In leaf-oriented trees, internal nodes MUST have exactly two children.
-        // If one subtree is empty, we cannot create a valid internal node.
-        // Instead, delete the pivot and return the non-empty subtree directly.
-        
         if (!tl && !tr) {
-            // Both empty - the pivot is unused, delete it
-            // Result is an empty tree
             delete x;
             root = nullptr;
             r->root = nullptr;
             return;
         }
         if (!tl) {
-            // Only right tree exists - delete pivot, use right tree
             delete x;
             root = tr;
             if (root) root->par = nullptr;
@@ -210,15 +222,12 @@ public:
             return;
         }
         if (!tr) {
-            // Only left tree exists - delete pivot, keep left tree
             delete x;
-            // root is already tl, just ensure no parent pointer
             if (root) root->par = nullptr;
             r->root = nullptr;
             return;
         }
         
-        // Both trees are non-empty - create the join with pivot
         if (height(tl) > height(tr) + 1) joinRight(root, x, r->root);
         else if (height(tr) > height(tl) + 1) joinLeft(root, x, r->root);
         else {
@@ -231,7 +240,8 @@ public:
         r->root = nullptr;
     }
 
-        void join(AVLTree* r){
+    /** @brief Join with another tree (extracts pivot from this tree). */
+    void join(AVLTree* r){
         Node* current = root;
         if(!current){
             root = r->root;
@@ -241,24 +251,27 @@ public:
         while(current->right) current = current->right;
         T temp = current->val;
         split(current->val, nullptr);
-        join(temp,r);
-
+        join(temp, r);
     }
 
-    // Split s.t. l < k and r > k
-    // After split: 'this' contains nodes < k, 'r' contains nodes > k
-    // If k exists (as a leaf), it is deleted
+    /**
+     * @brief Split tree at key k.
+     * 
+     * After split: 'this' contains nodes < k, 'r' contains nodes > k.
+     * If k exists as a leaf, it is deleted.
+     * 
+     * @param k Split key.
+     * @param r Receiver for right portion (may be nullptr to discard).
+     */
     void split(T k, AVLTree* r){
         if(!root) {
             if(r) r->root = nullptr;
             return;
         }
         
-        // Use recursive helper
         Node* rightRoot = nullptr;
         root = splitRecursive(root, k, rightRoot);
         
-        // Clean up parent pointers for new roots
         if(root) {
             root->par = nullptr;
         }
@@ -272,19 +285,13 @@ public:
     }
 
 protected:
-    // Recursively update all nodes in a subtree, bottom-up
     void updateAllNodes(Node* node) {
         if (!node) return;
-        // First update children (bottom-up)
         updateAllNodes(node->left);
         updateAllNodes(node->right);
-        // Then update this node
         updateData(node);
     }
-    // Recursive split helper that returns the left tree root and sets rightRoot to the right tree root
-    // The node 'node' is the current subtree to split
-    // Returns: root of the < k portion
-    // Sets rightRoot to: root of the > k portion
+
     Node* splitRecursive(Node* node, const T& k, Node*& rightRoot) {
         if(!node) {
             rightRoot = nullptr;
@@ -292,83 +299,55 @@ protected:
         }
         
         if(isLeaf(node)) {
-            // Base case: leaf node
             if(node->val == k) {
-                // Key matches - delete the leaf
                 delete node;
                 rightRoot = nullptr;
                 return nullptr;
             } else if(less(node->val, k)) {
-                // Leaf value < k, so it goes to left tree
                 node->par = nullptr;
                 rightRoot = nullptr;
                 return node;
             } else {
-                // Leaf value > k, so it goes to right tree
                 node->par = nullptr;
                 rightRoot = node;
                 return nullptr;
             }
         }
         
-        // Optimization checking bounds (min/max)
-        // If node entirely < k, returns {node, nullptr}
         if (less(node->max, k)) {
              rightRoot = nullptr;
              node->par = nullptr;
-             // Internal structure preserved, bridges valid internally.
              return node;
         }
-        // If node entirely >= k, returns {nullptr, node}
         if (!less(node->min, k)) {
              rightRoot = node;
              node->par = nullptr;
-             // Internal structure preserved, bridges valid internally.
              return nullptr;
         }
 
-        // Internal node that must be split
-        // 1. Recursive split
-        Node* leftLeft = nullptr;
         Node* leftRight = nullptr;
-        // Optimization: if k is in right subtree, entire left child goes left.
-        // But we just use recursion for simplicity first, or check bounds.
-        // We know node->right->min is the separator? No, node->min and node->max are.
+        Node* LL = splitRecursive(node->left, k, leftRight);
+        Node* RL = splitRecursive(node->right, k, rightRoot);
         
-        // Standard recursive split
-        Node* LL = splitRecursive(node->left, k, leftRight);  // leftRight is LR
-        Node* RL = splitRecursive(node->right, k, rightRoot); // rightRoot is RR, RL is returned
-        
-        // 2. Capture pivot value before deleting node
         T pivot = node->val;
         
-        // 3. Delete old internal node (structure dissolved)
         node->left = nullptr;
         node->right = nullptr;
         delete node;
         
-        // 4. Reassemble using join
-        // New Left Tree: join(LL, RL)
         Node* newLeft = joinNodes(LL, RL, pivot);
-        
-        // New Right Tree: join(LR, RR)
-        rightRoot = joinNodes(leftRight, rightRoot, pivot); // LR, RR
+        rightRoot = joinNodes(leftRight, rightRoot, pivot);
         
         return newLeft;
     }
 
-    // Helper to join two subtrees L and R using a dummy pivot
-    // Guarantees proper recomputation of bridges via updateData
     Node* joinNodes(Node* L, Node* R, const T& dummyVal) {
         if (!L && !R) return nullptr;
         if (!L) return R;
         if (!R) return L;
         
-        // Both exist: join them into a new internal node
-        // Create new internal node using dummyVal as pivot
         Node* P = new Node(dummyVal);
         
-        // Use standard join logic based on heights
         if (height(L) > height(R) + 1) {
             joinRight(L, P, R);
         } else if (height(R) > height(L) + 1) {
@@ -379,26 +358,24 @@ protected:
             updateData(P);
         }
         
-        // Retrace up to find new root
         while (P->par) P = P->par;
         return P;
     }
-
-protected:
 
     void joinRight(Node* tl, Node* x, Node* tr){
         while(tl->right && height(tl) > height(tr) + 1) tl = tl->right;
         if(tl && tl->par) tl->par->makeRightChild(x);
         x->makeLeftChild(tl);
         x->makeRightChild(tr);
-        retrace(x,true, true);
+        retrace(x, true, true);
     }
+
     void joinLeft(Node* tl, Node* x, Node* tr){
         while(tr->left && height(tr) > height(tl) + 1) tr = tr->left;
         if(tr && tr->par) tr->par->makeLeftChild(x);
         x->makeLeftChild(tl);
         x->makeRightChild(tr);
-        retrace(x,true, true);
+        retrace(x, true, true);
     }
 
     void rotateR(Node* x){
@@ -471,12 +448,10 @@ protected:
                     continue;
                 }
             }
-            //if ((insertion && dif == 0) || (!insertion && (dif == -1 || dif == 1))) balance = false;
         }
     }
 
-    inline
-    void updateData(Node* x){
+    inline void updateData(Node* x){
         x->size = size(x->left) + size(x->right) + isLeaf(x);
         x->height = std::max(height(x->left), height(x->right)) + 1;
         if(x->left) x->min = x->left->min;
@@ -486,44 +461,38 @@ protected:
         onUpdate(x);
     }
 
-    virtual inline
-    void onUpdate(Node* x){};
+    virtual inline void onUpdate(Node* x){}
+    virtual inline void onVisit(Node* x){}
 
-    virtual inline
-    void onVisit(Node* x){};
-
-    inline
-    bool isLeaf(const Node* x){
+    inline bool isLeaf(const Node* x){
         return x && !(x->left || x->right);
     }
 
-    inline
-    bool isLeftChild(const Node* x){
+    inline bool isLeftChild(const Node* x){
         return (x->par && x->par->left == x);
     }
 
-    inline
-    int height(const Node* x){
+    inline int height(const Node* x){
         if(x) return x->height;
         return 0;
     }
 
-    inline
-    uint size(const Node* x){
+    inline uint size(const Node* x){
         if(x) return x->size;
         return 0;
     }
 
 public:
-    // Clear all nodes and reset the tree
+    /** @brief Clear all nodes. */
     void clear() {
         delete root;
         root = nullptr;
     }
 
-    // Build a balanced AVL tree from a sorted vector in O(n) time.
-    // The vector MUST be sorted according to the Comparator.
-    // This replaces any existing tree content.
+    /**
+     * @brief Build balanced tree from sorted values in O(n) time.
+     * @param sorted Values sorted by Comparator.
+     */
     void buildFromSorted(const std::vector<T>& sorted) {
         clear();
         if (sorted.empty()) return;
@@ -531,34 +500,24 @@ public:
     }
 
 protected:
-    // Recursive helper that builds a subtree from sorted[start..end)
-    // Returns the root of the subtree.
-    // For a leaf-oriented AVL tree: internal nodes store "bridges" computed from children,
-    // and leaves store the actual data.
     Node* buildFromSortedRecursive(const std::vector<T>& sorted, size_t start, size_t end) {
         if (start >= end) return nullptr;
         
         if (end - start == 1) {
-            // Base case: single element becomes a leaf
             Node* leaf = new Node(sorted[start]);
             return leaf;
         }
         
-        // Internal node: pick median point for balanced split
         size_t mid = start + (end - start) / 2;
         
-        // Create an internal node (its val will be computed by onUpdate)
-        Node* node = new Node(sorted[mid]); // Temporary value, will be updated
+        Node* node = new Node(sorted[mid]);
         
-        // Recursively build left and right subtrees
         node->left = buildFromSortedRecursive(sorted, start, mid);
         node->right = buildFromSortedRecursive(sorted, mid, end);
         
-        // Set parent pointers
         if (node->left) node->left->par = node;
         if (node->right) node->right->par = node;
         
-        // Update node data (height, size, min, max, and call onUpdate for bridges)
         updateData(node);
         
         return node;

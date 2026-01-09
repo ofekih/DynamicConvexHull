@@ -98,8 +98,7 @@ void testCase(const std::vector<Point_2>& points, double epsilon, const std::str
         });
     sls.build(sorted);
     
-    // Print debug info
-    sls.printDebugInfo();
+    // Debug info was removed during cleanup
     
     // Run algorithm
     std::cout << "\n--- Running findStabbingLine() ---" << std::endl;
