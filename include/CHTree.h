@@ -651,6 +651,204 @@ private:
         
         return true;
     }
+
+    // ========================================================================
+    // Find Critical Vertex for Stabbing Line Query
+    // ========================================================================
+    //
+    // These methods traverse the tree to find the vertex where the slope
+    // difference between two hulls changes sign (subgradient condition).
+    //
+    // The algorithm performs a discrete binary search over tree nodes:
+    // At each node, check the slope difference at the bridge midpoint.
+    // Navigate left or right based on the sign of the difference.
+    // Terminate at a leaf (point/vertex).
+    //
+    // Time complexity: O(log n) tree traversal × O(log n) slope query = O(log² n)
+    // ========================================================================
+    
+    // Find critical vertex in THIS hull (ceiling or floor) using slope from OTHER hull.
+    // lower = true: this is the lower hull (ceiling shifted), other is upper hull (floor shifted)
+    // lower = false: this is the upper hull (floor shifted), other is lower hull (ceiling shifted)
+    // Returns the x-coordinate of the critical point and the slope at that point.
+    template<bool lower>
+    std::pair<double, double> findCriticalVertex(const CHTree<Traits>& otherHull) const {
+        auto current = AVLTree<Bridges<Traits>>::root;
+        if (!current) return {0.0, 0.0};
+        
+        // For lower hull (ceiling): we're looking for where slopeCeil - slopeFloor changes sign
+        // For upper hull (floor): we're looking for where slopeCeil - slopeFloor changes sign
+        // Since LowerHullCeiling uses lower=true and UpperHullFloor uses lower=false:
+        // - When traversing ceiling (lower=true), query floor's upper hull slope (lower=false)
+        // - When traversing floor (lower=false), query ceiling's lower hull slope (lower=true)
+        
+        while (current && (current->left || current->right)) {
+            const Bridge& bridge = current->val[lower];
+            double midX = (bridge.min().x() + bridge.max().x()) / 2.0;
+            
+            // Get this hull's slope at the bridge
+            double thisSlope;
+            if (bridge.is_vertical()) {
+                // Vertical bridge - use a large slope
+                thisSlope = lower ? std::numeric_limits<double>::infinity() 
+                                  : -std::numeric_limits<double>::infinity();
+            } else {
+                double dx = bridge.max().x() - bridge.min().x();
+                if (std::abs(dx) < 1e-15) {
+                    thisSlope = 0.0;
+                } else {
+                    thisSlope = (bridge.max().y() - bridge.min().y()) / dx;
+                }
+            }
+            
+            // Get other hull's slope at this x
+            // If this is ceiling (lower=true), other is floor, query its upper hull (getUpperHullSlope)
+            // If this is floor (lower=false), other is ceiling, query its lower hull (getLowerHullSlope)
+            double otherSlope;
+            if constexpr (lower) {
+                otherSlope = otherHull.getUpperHullSlope(midX);
+            } else {
+                otherSlope = otherHull.getLowerHullSlope(midX);
+            }
+            
+            // Handle infinite slopes
+            if (std::isinf(thisSlope) || std::isinf(otherSlope)) {
+                // At a vertex with undefined slope - this is a candidate
+                // Return the x-coordinate of the bridge endpoint
+                return {bridge.min().x(), 0.0};
+            }
+            
+            // Compute slope difference: slopeCeil - slopeFloor
+            // For ceiling traversal (lower=true): diff = thisSlope - otherSlope
+            // For floor traversal (lower=false): diff = otherSlope - thisSlope
+            // (ceiling is lower hull, floor is upper hull)
+            double slopeDiff;
+            if constexpr (lower) {
+                slopeDiff = thisSlope - otherSlope;
+            } else {
+                slopeDiff = otherSlope - thisSlope;
+            }
+            
+            // Navigate based on slope difference sign
+            // slopeDiff < 0 means ceiling is flatter → minimum is to the right
+            // slopeDiff > 0 means ceiling is steeper → minimum is to the left
+            if (slopeDiff < -1e-9) {
+                current = current->right ? current->right : current;
+                if (!current->right) break;
+            } else if (slopeDiff > 1e-9) {
+                current = current->left ? current->left : current;
+                if (!current->left) break;
+            } else {
+                // slopeDiff ≈ 0: found parallel edges, this is the critical point
+                return {midX, thisSlope};
+            }
+        }
+        
+        // Reached a leaf - return its position (it's a point)
+        if (current) {
+            Point p = current->val[lower].min();
+            return {p.x(), 0.0};  // Slope at a point is not well-defined, will be computed elsewhere
+        }
+        return {0.0, 0.0};
+    }
+
+public:
+    // Public wrappers for the critical vertex search
+    std::pair<double, double> findCriticalVertexFromCeiling(const CHTree<Traits>& floorHull) const {
+        return findCriticalVertex<true>(floorHull);
+    }
+    
+    std::pair<double, double> findCriticalVertexFromFloor(const CHTree<Traits>& ceilingHull) const {
+        return findCriticalVertex<false>(ceilingHull);
+    }
+
+    // ========================================================================
+    
+    template<bool lower>
+    std::pair<double, double> getSlopeRange(double x) const {
+        auto current = AVLTree<Bridges<Traits>>::root;
+        if (!current) return {0.0, 0.0};
+        
+        const double INF = std::numeric_limits<double>::infinity();
+        double leftSlope = lower ? -INF : INF;
+        double rightSlope = lower ? INF : -INF;
+        bool foundExactVertex = false;
+        
+        // Traverse to find the slopes adjacent to x
+        while (current && (current->left || current->right)) {
+            const Bridge& bridge = current->val[lower];
+            double minX = bridge.min().x();
+            double maxX = bridge.max().x();
+            
+            double bridgeSlope = 0.0;
+            if (!bridge.is_vertical()) {
+                double dx = maxX - minX;
+                if (std::abs(dx) >= 1e-15) {
+                    bridgeSlope = (bridge.max().y() - bridge.min().y()) / dx;
+                }
+            }
+            
+            // Check if x is exactly at a vertex (endpoint of this bridge)
+            if (std::abs(x - minX) < 1e-12) {
+                // x is at the LEFT endpoint of this bridge
+                // This bridge is to the RIGHT of x, so bridgeSlope is the right slope
+                rightSlope = bridgeSlope;
+                foundExactVertex = true;
+                // Continue LEFT to find the left slope
+                current = current->left;
+            } else if (std::abs(x - maxX) < 1e-12) {
+                // x is at the RIGHT endpoint of this bridge
+                // This bridge is to the LEFT of x, so bridgeSlope is the left slope
+                leftSlope = bridgeSlope;
+                foundExactVertex = true;
+                // Continue RIGHT to find the right slope
+                current = current->right;
+            } else if (x > minX && x < maxX) {
+                // x is strictly INSIDE this bridge (on an edge interior)
+                // Only one slope is valid
+                return {bridgeSlope, bridgeSlope};
+            } else if (x < minX) {
+                // x is to the LEFT of this bridge
+                // This bridge provides the right bound
+                rightSlope = bridgeSlope;
+                current = current->left;
+            } else {
+                // x is to the RIGHT of this bridge
+                // This bridge provides the left bound
+                leftSlope = bridgeSlope;
+                current = current->right;
+            }
+        }
+        
+        // If we found an exact vertex, also check the leaf for additional info
+        if (current && foundExactVertex) {
+            // At a leaf after exact vertex match - we've collected left and right slopes
+            // Return the range based on hull type
+            if constexpr (lower) {
+                // Lower hull: valid tangent slopes are in [leftSlope, rightSlope]
+                return {leftSlope, rightSlope};
+            } else {
+                // Upper hull: valid tangent slopes are in [rightSlope, leftSlope]
+                return {rightSlope, leftSlope};
+            }
+        }
+        
+        // Reached a leaf without finding x on a bridge - this is a vertex
+        if constexpr (lower) {
+            return {leftSlope, rightSlope};
+        } else {
+            return {rightSlope, leftSlope};
+        }
+    }
+    
+    // Public wrappers for getSlopeRange
+    std::pair<double, double> getLowerHullSlopeRange(double x) const { 
+        return getSlopeRange<true>(x); 
+    }
+    std::pair<double, double> getUpperHullSlopeRange(double x) const { 
+        return getSlopeRange<false>(x); 
+    }
+
 public:
 };
 #endif //DYNAMICCONVEXHULL_CHTREE_H

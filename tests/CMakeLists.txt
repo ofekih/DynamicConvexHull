@@ -13,9 +13,13 @@ target_link_libraries(test_split_debug PRIVATE dch_lib GTest::gtest_main)
 add_executable(test_stabbing_line test_stabbing_line.cpp)
 target_link_libraries(test_stabbing_line PRIVATE dch_lib GTest::gtest_main)
 
+add_executable(debug_stabbing_line debug_stabbing_line.cpp)
+target_link_libraries(debug_stabbing_line PRIVATE dch_lib)
+
 include(GoogleTest)
 gtest_discover_tests(test_convex_hull)
 gtest_discover_tests(test_build_complexity)
 gtest_discover_tests(test_split_merge)
 gtest_discover_tests(test_split_debug)
 gtest_discover_tests(test_stabbing_line)
+
