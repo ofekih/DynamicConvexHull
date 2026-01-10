@@ -3,10 +3,10 @@
 #include <vector>
 #include <random>
 #include "StabbingLineStructure.h"
-#include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
+#include "inexact.h"
 
-typedef CGAL::Exact_predicates_inexact_constructions_kernel K;
-typedef K::Point_2 Point_2;
+using K = Inexact_kernel<double>;
+using Point_2 = K::Point_2;
 typedef StabbingLineStructure<K> SLS;
 
 // Generate points near y = x with small noise

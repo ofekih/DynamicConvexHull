@@ -23,12 +23,9 @@ FetchContent_Declare(
 set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(benchmark)
 
-find_package(CGAL)
-
-# Create an interface library for the headers
+# Create an interface library for the headers (no external dependencies)
 add_library(dch_lib INTERFACE)
 target_include_directories(dch_lib INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
-target_link_libraries(dch_lib INTERFACE CGAL::CGAL)
 
 add_executable(DynamicConvexHull main.cpp)
 target_link_libraries(DynamicConvexHull dch_lib)

@@ -1,12 +1,12 @@
 #include <benchmark/benchmark.h>
-#include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
+#include "inexact.h"
 #include "CHTree.h"
 #include <random>
 #include <vector>
 #include <algorithm>
 
-typedef CGAL::Exact_predicates_inexact_constructions_kernel K;
-typedef K::Point_2 Point_2;
+using K = Inexact_kernel<double>;
+using Point_2 = K::Point_2;
 
 // Helper to generate sorted points (ensures consistent setup)
 static std::vector<Point_2> generateSortedPoints(int n, uint64_t seed = 42) {

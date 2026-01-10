@@ -6,12 +6,12 @@
 #ifndef DYNAMICCONVEXHULL_UTIL_H
 #define DYNAMICCONVEXHULL_UTIL_H
 
-#include <CGAL/enum.h>
+#include <compare>
 #include <array>
 
 /**
  * @brief Pair of bridges (upper and lower) stored at each internal node.
- * @tparam Traits CGAL-style kernel.
+ * @tparam Traits Kernel providing Point_2, Segment_2, and comparators.
  */
 template<class Traits>
 struct Bridges{
@@ -28,7 +28,7 @@ struct Bridges{
     const Bridge& operator[](size_t idx) const { return data[idx % 2]; }
 
     bool operator==(const Bridges& b) const {
-        return (compare(data[0][0], b[0][0]) == CGAL::EQUAL);
+        return compare(data[0][0], b[0][0]) == 0;
     }
 
     bool operator!=(const Bridges& b) const {
@@ -36,11 +36,11 @@ struct Bridges{
     }
 
     bool operator<(const Bridges& b) const {
-        return (compare(data[0][0], b[0][0]) == CGAL::SMALLER);
+        return compare(data[0][0], b[0][0]) < 0;
     }
 
     bool operator<=(const Bridges& b) const {
-        return (compare(data[0][0], b[0][0]) != CGAL::LARGER);
+        return compare(data[0][0], b[0][0]) <= 0;
     }
 };
 

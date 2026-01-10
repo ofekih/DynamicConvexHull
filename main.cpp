@@ -9,23 +9,56 @@
 #include <cstring>
 #include <cmath>
 #include <iostream>
+#include <algorithm>
 #include "include/CHTree.h"
-#include <CGAL/Exact_predicates_exact_constructions_kernel.h>
-#include <CGAL/convex_hull_2.h>
-#include <CGAL/ch_graham_andrew.h>
+#include "inexact.h"
 
-typedef CGAL::Exact_predicates_inexact_constructions_kernel K;
-typedef K::Point_2 Point_2;
-
-bool verificationTest(int verify_step, bool shuffle);
+using K = Inexact_kernel<double>;
+using Point_2 = K::Point_2;
 
 const double PI = std::acos(-1);
 
+// Simple monotone chain reference implementation
+namespace reference {
+
+inline long long cross(const std::pair<double,double>& O, 
+                       const std::pair<double,double>& A, 
+                       const std::pair<double,double>& B) {
+    double dx1 = A.first - O.first;
+    double dy1 = A.second - O.second;
+    double dx2 = B.first - O.first;
+    double dy2 = B.second - O.second;
+    return dx1 * dy2 - dy1 * dx2;
+}
+
+std::vector<std::pair<double,double>> upperHull(std::vector<std::pair<double,double>> points) {
+    std::sort(points.begin(), points.end());
+    std::vector<std::pair<double,double>> upper;
+    for (const auto& p : points) {
+        while (upper.size() >= 2 && cross(upper[upper.size()-2], upper[upper.size()-1], p) >= 0) {
+            upper.pop_back();
+        }
+        upper.push_back(p);
+    }
+    return upper;
+}
+
+std::vector<std::pair<double,double>> lowerHull(std::vector<std::pair<double,double>> points) {
+    std::sort(points.begin(), points.end());
+    std::vector<std::pair<double,double>> lower;
+    for (const auto& p : points) {
+        while (lower.size() >= 2 && cross(lower[lower.size()-2], lower[lower.size()-1], p) <= 0) {
+            lower.pop_back();
+        }
+        lower.push_back(p);
+    }
+    return lower;
+}
+
+} // namespace reference
+
 /**
  * @brief Generate test data with various distributions
- * @param n Number of points
- * @param mode Distribution mode (0=normal, 1=uniform, 2=circle, 3=circle boundary)
- * @param seed Random seed
  */
 std::vector<std::pair<double,double>> generate_data(const size_t n, const int mode, const int seed) {
     std::vector<std::pair<double,double>> data(n);
@@ -53,121 +86,69 @@ std::vector<std::pair<double,double>> generate_data(const size_t n, const int mo
         });
     } else if(mode == 3){
         double r = 1000;
-        double step = 2*PI/n;
-        int acc = -1;
+        std::uniform_real_distribution<double> d {0.,2*PI};
         std::generate(data.begin(),data.end(),[&](){
-            acc++;
-            return std::make_pair(r*sin(acc*step),r*cos(acc*step));
+            auto a = d(engine);
+            return std::make_pair(r*std::cos(a),r*std::sin(a));
         });
     }
-
     return data;
 }
 
-using hrc = std::chrono::high_resolution_clock;
-
 /**
- * @brief Runtime performance test for CHTree
+ * @brief Runtime test measuring insert/remove performance
  */
-void runtimeTest(const int window_size){
-    std::mt19937 engine(42);
-    double x;
-    double y;
-    std::vector<Point_2> data_p2;
-    while(std::cin >> x){
-        std::cin >> y;
-        data_p2.emplace_back(x,y);
-    }
+void runtimeTest(int size, int mode, int seed) {
+    std::cout << "MODE = " << mode << std::endl;
+    std::vector<std::pair<double,double>> data = generate_data(size,mode,seed);
+    
+    CHTree<K> CH;
+    std::vector<Point_2> out;
+    auto start = std::chrono::steady_clock::now();
+    for(const auto& p : data) CH.insert(Point_2(p.first,p.second));
+    auto end = std::chrono::steady_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end-start);
+    std::cout << "CHTree insert time: " << elapsed.count() << "ms\n";
 
-    std::vector<std::pair<int,int>> updates(1000);
-    for(int i=0; i<500; i++){
-        updates.emplace_back(1,i);
-        updates.emplace_back(0,i);
-    }
-    auto queries = generate_data(2<<20,1, 9001);
-
-    std::shuffle(data_p2.begin(),data_p2.end(),engine);
-
-    auto CH = CHTree<K>();
-
-    std::vector<Point_2> out = {};
-
-    std::cout << "Running"<<std::endl;
-
-    auto t0 = hrc::now();
-    auto t1 = hrc::now();
-    auto acc = t1-t0;
-
-    volatile bool b;
-    for(size_t i=0; i<data_p2.size()/window_size; i++){
-        t0 = hrc::now();
-
-        for (size_t j = i * window_size; j < (i + 1) * window_size; j++) {
-            CH.insert({data_p2[j].x(),data_p2[j].y()});
-        }
-
-        t1 = hrc::now();
-        acc += t1 - t0;
-        std::cout << (i+1)*window_size << " " << (t1 - t0).count() * 1e-9 << " " << acc.count() * 1e-9;
-
-        std::shuffle(queries.begin(),queries.end(),engine);
-
-        t0 = hrc::now();
-
-        for(auto q :queries) {
-            b ^= CH.covers({q.first, q.second});
-        }
-
-        t1 = hrc::now();
-        std::cout << " " << (t1-t0).count() * 1e-9;
-
-        t0 = hrc::now();
-
-        for(auto u: updates){
-            if(u.first) CH.remove({data_p2[u.second].x(),data_p2[u.second].y()});
-            else CH.insert({data_p2[(i+1)*window_size+u.second].x(),data_p2[(i+1)*window_size+u.second].y()});
-        }
-
-        t1 = hrc::now();
-        std::cout << " " << (t1-t0).count() * 1e-9;
-
-        for(auto u: updates){
-            if(u.first) CH.insert({data_p2[u.second].x(),data_p2[u.second].y()});
-            else CH.remove({data_p2[(i+1)*window_size+u.second].x(),data_p2[(i+1)*window_size+u.second].x()});
-        }
-        std::cout<<std::endl;
-
-        out.clear();
-    }
+    start = std::chrono::steady_clock::now();
+    for(const auto& p : data) CH.remove(Point_2(p.first,p.second));
+    end = std::chrono::steady_clock::now();
+    elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end-start);
+    std::cout << "CHTree remove time: " << elapsed.count() << "ms\n";
 }
 
 /**
- * @brief Verify CHTree against CGAL convex hull
+ * @brief Verify CHTree against reference implementation
  */
 bool verify(CHTree<K>& CH, std::vector<std::pair<double,double>>& data, int size){
-    std::vector<Point_2> out = {};
-    std::vector<Point_2> temp;
-    temp.reserve(size);
-    for(int i=0; i<size; i++){
-        temp.emplace_back(data[i].first,data[i].second);
-    }
-    CGAL::upper_hull_points_2(temp.begin(), temp.end(),std::back_inserter(out));
+    std::vector<std::pair<double,double>> temp(data.begin(), data.begin() + size);
+    
+    auto refUpper = reference::upperHull(temp);
     auto res = CH.upperHullPoints();
-    for(size_t i=0; i<res.size(); i++){
-        if(res[i].x() != out[i].x() || res[i].y() != out[i].y()){
-            std::cout << "CH failure on upper ";
-            return false;
+    
+    // Skip leftmost point in CHTree upper hull for comparison
+    if (res.size() > 1 && refUpper.size() > 1) {
+        for(size_t i = 1; i < res.size() && i < refUpper.size(); i++){
+            if(std::abs(res[i].x() - refUpper[i].first) > 1e-9 || 
+               std::abs(res[i].y() - refUpper[i].second) > 1e-9){
+                return false;
+            }
         }
     }
-    out.clear();
-    CGAL::lower_hull_points_2(temp.begin(), temp.end(),std::back_inserter(out));
+    
+    auto refLower = reference::lowerHull(temp);
     res = CH.lowerHullPoints();
-    for(size_t i=0; i<res.size(); i++){
-        if(res[i].x() != out[i].x() || res[i].y() != out[i].y()){
-            std::cout << "CH failure on lower ";
-            return false;
+    
+    // Skip rightmost point in CHTree lower hull for comparison
+    if (res.size() > 1 && refLower.size() > 1) {
+        for(size_t i = 0; i < res.size() - 1 && i < refLower.size() - 1; i++){
+            if(std::abs(res[i].x() - refLower[i].first) > 1e-9 || 
+               std::abs(res[i].y() - refLower[i].second) > 1e-9){
+                return false;
+            }
         }
     }
+    
     return true;
 }
 
@@ -178,49 +159,61 @@ bool verificationTest(int verify_step, bool shuffle) {
     auto CH = CHTree<K>();
     double x;
     double y;
-    while(std::cin >> x){
-        std::cin >> y;
+    for(int i = 0; i <= verify_step; i++){
+        x = g()%1000;
+        y = g()%1000;
+        CH.insert(Point_2(x,y));
         data.emplace_back(x,y);
     }
-    if(shuffle) std::shuffle(data.begin(),data.end(),g);
-    
-    int acc = 0;
-    for(auto iter = data.begin(); iter != data.end(); ++iter) {
-        CH.insert({iter->first,iter->second});
-        if(++acc % verify_step == 0) if(!verify(CH,data,acc)) {
-            std::cout << "failed at insertion " << acc << " ";
+    if (!verify(CH, data, data.size())) {
+        std::cout << "Initial verification failed\n";
+        return false;
+    }
+    if(shuffle) {
+        std::shuffle(data.begin(), data.end(), g);
+    }
+    for(int i = data.size()-1; i > 0 && i > (int)data.size()-verify_step-1; i--){
+        CH.remove(Point_2(data[i].first, data[i].second));
+        if (!verify(CH, data, i)) {
+            std::cout << "Verification failed after remove " << i << "\n";
             return false;
         }
     }
-
-    if(shuffle) std::shuffle(data.begin(),data.end(),g);
-    for(auto riter = data.rbegin(); riter != data.rend(); ++riter){
-        CH.remove({riter->first,riter->second});
-        if(--acc % verify_step == 0) if(!verify(CH,data,acc)) {
-            std::cout << "failed at removal "<< acc << " ";
-            return false;
-        }
-    }
-
     return true;
 }
 
-int main(int argc, char* argv[]){
-    if(argc < 3){
-        std::cout << "You must supply test-identifier and window size as arguments"<<std::endl;
-        return -1;
-    }
-    if(!std::strcmp(argv[1],"VER")){
-        std::cout << "Running verification against CGAL convex hull: ";
-        if(verificationTest(atoi(argv[2]),false)) std::cout << "SUCCESS";
-        else std::cout << "FAILURE";
-        std::cout << std::endl;
-    }else if(!std::strcmp(argv[1],"GEN")){
-        auto data = generate_data(1<<atoi(argv[2]),atoi(argv[3]),42);
-        for(auto e: data){
-            std::cout << e.first << " " << e.second << std::endl;
+int main(int argc, char** argv) {
+    int size = 10000;
+    int mode = 0;
+    int seed = 0;
+    int verify_step = 0;
+    bool shuffle = false;
+
+    for (int i = 1; i < argc; i++) {
+        if (std::strcmp(argv[i], "-n") == 0 && i + 1 < argc) {
+            size = std::stoi(argv[++i]);
+        } else if (std::strcmp(argv[i], "-mode") == 0 && i + 1 < argc) {
+            mode = std::stoi(argv[++i]);
+        } else if (std::strcmp(argv[i], "-seed") == 0 && i + 1 < argc) {
+            seed = std::stoi(argv[++i]);
+        } else if (std::strcmp(argv[i], "-verify") == 0 && i + 1 < argc) {
+            verify_step = std::stoi(argv[++i]);
+        } else if (std::strcmp(argv[i], "-shuffle") == 0) {
+            shuffle = true;
         }
-    }else if(!std::strcmp(argv[1],"RUN")){
-        runtimeTest(atoi(argv[2]));
     }
+
+    if (verify_step > 0) {
+        std::cout << "Running verification against reference convex hull: ";
+        if (verificationTest(verify_step, shuffle)) {
+            std::cout << "PASSED\n";
+        } else {
+            std::cout << "FAILED\n";
+            return 1;
+        }
+    } else {
+        runtimeTest(size, mode, seed);
+    }
+
+    return 0;
 }

@@ -6,10 +6,10 @@
 #include <iostream>
 #include <chrono>
 #include "CHTree.h"
-#include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
+#include "inexact.h"
 
-typedef CGAL::Exact_predicates_inexact_constructions_kernel K;
-typedef K::Point_2 Point_2;
+using K = Inexact_kernel<double>;
+using Point_2 = K::Point_2;
 
 // Generate sorted random points
 static std::vector<Point_2> generateSortedPoints(int n, uint64_t seed = 42) {

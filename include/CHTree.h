@@ -16,7 +16,7 @@
 #include <vector>
 #include <limits>
 #include <cmath>
-#include <CGAL/enum.h>
+#include <compare>
 #include "AvlTree.h"
 #include "util.h"
 
@@ -24,7 +24,7 @@
 
 /**
  * @brief Dynamic Convex Hull tree data structure.
- * @tparam Traits CGAL-style kernel providing Point_2, Segment_2, and predicates.
+ * @tparam Traits Kernel providing Point_2, Segment_2, and predicates.
  */
 template<class Traits>
 class CHTree : public AVLTree<Bridges<Traits>>{
@@ -46,9 +46,9 @@ protected:
      */
     template<bool lower>
     bool slope_comp(const Bridge& l, const Bridge& r){
-        CGAL::Comparison_result res = compare_slope(l,r);
-        if(res == CGAL::EQUAL) return true;
-        return (res == CGAL::SMALLER) != lower;
+        auto res = compare_slope(l, r);
+        if(res == 0) return true;
+        return (res < 0) != lower;
     }
 
     /**
@@ -64,9 +64,9 @@ protected:
             if (m.x() < r.min().x()) return !lower;
             return lower;
         }
-        CGAL::Comparison_result res = compare_at_x(m,l.supporting_line(),r.supporting_line());
-        if(res == CGAL::EQUAL) return true;
-        return (res == CGAL::SMALLER) == lower;
+        auto res = compare_at_x(m, l.supporting_line(), r.supporting_line());
+        if(res == 0) return true;
+        return (res < 0) == lower;
     }
 
     /**
@@ -75,9 +75,9 @@ protected:
      */
     template<bool lower>
     bool cover_comp(const Point& p, const Bridge& b){
-        CGAL::Comparison_result res = compare_at_x(p,b.supporting_line());
-        if(res == CGAL::EQUAL) return true;
-        return (res == CGAL::LARGER) == lower;
+        auto res = compare_at_x(p, b.supporting_line());
+        if(res == 0) return true;
+        return (res > 0) == lower;
     }
 
     /**
