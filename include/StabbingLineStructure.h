@@ -3,8 +3,8 @@
  * @brief Query for epsilon-stabbing lines in O(log² n).
  * 
  * A "stabbing line" is a line that passes within vertical distance epsilon
- * of every point in the set. This structure maintains two convex hulls
- * (ceiling and floor) to efficiently query for stabbing lines.
+ * of every point in the set. This structure maintains a single convex hull
+ * and applies epsilon adjustments during queries.
  * 
  * Time Complexities:
  *   - insert/remove: O(log² n)
@@ -43,6 +43,11 @@ struct StabbingLine {
 
 /**
  * @brief Data structure for querying epsilon-stabbing lines.
+ * 
+ * Uses a single convex hull and applies epsilon adjustments at query time:
+ * - For "ceiling" queries (upper boundary): lower hull y + epsilon
+ * - For "floor" queries (lower boundary): upper hull y - epsilon
+ * 
  * @tparam Traits CGAL-style kernel.
  */
 template<class Traits>
@@ -52,18 +57,9 @@ public:
     using Line = StabbingLine<Traits>;
     
 private:
-    CHTree<Traits> ceiling;  ///< Stores (x, y+ε), query lower hull
-    CHTree<Traits> floor;    ///< Stores (x, y-ε), query upper hull
+    CHTree<Traits> hull;  ///< Single hull storing original points
     double epsilon;
     size_t pointCount = 0;
-    
-    Point shiftUp(const Point& p) const {
-        return Point(p.x(), p.y() + epsilon);
-    }
-    
-    Point shiftDown(const Point& p) const {
-        return Point(p.x(), p.y() - epsilon);
-    }
     
 public:
     explicit StabbingLineStructure(double eps = 1.0) : epsilon(eps) {}
@@ -74,51 +70,36 @@ public:
     
     /** @brief Insert a point. O(log² n) */
     void insert(const Point& p) {
-        ceiling.insert(shiftUp(p));
-        floor.insert(shiftDown(p));
+        hull.insert(p);
         ++pointCount;
     }
     
     /** @brief Remove a point. O(log² n) */
     void remove(const Point& p) {
-        ceiling.remove(shiftUp(p));
-        floor.remove(shiftDown(p));
+        hull.remove(p);
         if (pointCount > 0) --pointCount;
     }
     
     /** @brief Build from sorted points. O(n) */
     void build(const std::vector<Point>& sortedPoints) {
-        std::vector<Point> ceilingPoints, floorPoints;
-        ceilingPoints.reserve(sortedPoints.size());
-        floorPoints.reserve(sortedPoints.size());
-        
-        for (const auto& p : sortedPoints) {
-            ceilingPoints.push_back(shiftUp(p));
-            floorPoints.push_back(shiftDown(p));
-        }
-        
-        ceiling.build(ceilingPoints);
-        floor.build(floorPoints);
+        hull.build(sortedPoints);
         pointCount = sortedPoints.size();
     }
     
     /** @brief Split at x-coordinate. O(log² n) */
     StabbingLineStructure split(double splitX) {
         StabbingLineStructure right(epsilon);
-        auto ceilingRight = ceiling.split(splitX);
-        auto floorRight = floor.split(splitX);
-        right.ceiling = std::move(ceilingRight);
-        right.floor = std::move(floorRight);
-        right.pointCount = right.ceiling.size();
-        pointCount = ceiling.size();
+        auto hullRight = hull.split(splitX);
+        right.hull = std::move(hullRight);
+        right.pointCount = right.hull.size();
+        pointCount = hull.size();
         return right;
     }
     
     /** @brief Join with another structure. O(log² n) */
     void join(StabbingLineStructure& other) {
-        ceiling.join(other.ceiling);
-        floor.join(other.floor);
-        pointCount = ceiling.size();
+        hull.join(other.hull);
+        pointCount = hull.size();
         other.pointCount = 0;
     }
     
@@ -132,15 +113,16 @@ public:
             return Line(0.0, 0.0);
         }
         
-        auto [minX, maxX] = ceiling.getXRange();
+        auto [minX, maxX] = hull.getXRange();
         
         if (minX > maxX) {
             return Line(0.0, 0.0);
         }
         
         if (std::abs(maxX - minX) < 1e-12) {
-            double yCeil = ceiling.evaluateLowerHullAt(minX);
-            double yFloor = floor.evaluateUpperHullAt(minX);
+            // Single x-coordinate: ceiling = lower hull + epsilon, floor = upper hull - epsilon
+            double yCeil = hull.evaluateLowerHullAt(minX) + epsilon;
+            double yFloor = hull.evaluateUpperHullAt(minX) - epsilon;
             double gap = yCeil - yFloor;
             if (gap >= -1e-9) {
                 return Line(0.0, (yCeil + yFloor) / 2.0);
@@ -148,8 +130,10 @@ public:
             return std::nullopt;
         }
         
-        auto [xCeil, slopeCeil] = ceiling.findCriticalVertexFromCeiling(floor);
-        auto [xFloor, slopeFloor] = floor.findCriticalVertexFromFloor(ceiling);
+        // Find critical vertices - comparing hull against itself since both 
+        // ceiling and floor are derived from the same hull
+        auto [xCeil, slopeCeil] = hull.findCriticalVertexFromCeiling(hull);
+        auto [xFloor, slopeFloor] = hull.findCriticalVertexFromFloor(hull);
         
         double gapCeil = computeGap(xCeil);
         double gapFloor = computeGap(xFloor);
@@ -167,12 +151,14 @@ public:
             return std::nullopt;
         }
         
-        double yCeil = ceiling.evaluateLowerHullAt(bestX);
-        double yFloor = floor.evaluateUpperHullAt(bestX);
+        // Ceiling = lower hull + epsilon, Floor = upper hull - epsilon
+        double yCeil = hull.evaluateLowerHullAt(bestX) + epsilon;
+        double yFloor = hull.evaluateUpperHullAt(bestX) - epsilon;
         double yMid = (yCeil + yFloor) / 2.0;
         
-        auto [ceilLeft, ceilRight] = ceiling.getLowerHullSlopeRange(bestX);
-        auto [floorLeft, floorRight] = floor.getUpperHullSlopeRange(bestX);
+        // Get slope ranges - for ceiling use lower hull, for floor use upper hull
+        auto [ceilLeft, ceilRight] = hull.getLowerHullSlopeRange(bestX);
+        auto [floorLeft, floorRight] = hull.getUpperHullSlopeRange(bestX);
         
         double minValid, maxValid;
         
@@ -196,8 +182,8 @@ public:
         
         auto verifyGapWithSlope = [&](double x) -> bool {
             double lineY = slope * x + intercept;
-            double yCeilAt = ceiling.evaluateLowerHullAt(x);
-            double yFloorAt = floor.evaluateUpperHullAt(x);
+            double yCeilAt = hull.evaluateLowerHullAt(x) + epsilon;
+            double yFloorAt = hull.evaluateUpperHullAt(x) - epsilon;
             return (lineY <= yCeilAt + 1e-9) && (lineY >= yFloorAt - 1e-9);
         };
         
@@ -217,11 +203,11 @@ public:
     double getMinimumGap() const {
         if (pointCount == 0) return std::numeric_limits<double>::infinity();
         
-        auto [minX, maxX] = ceiling.getXRange();
+        auto [minX, maxX] = hull.getXRange();
         if (minX > maxX) return std::numeric_limits<double>::infinity();
         
-        auto [xCeil, _1] = ceiling.findCriticalVertexFromCeiling(floor);
-        auto [xFloor, _2] = floor.findCriticalVertexFromFloor(ceiling);
+        auto [xCeil, _1] = hull.findCriticalVertexFromCeiling(hull);
+        auto [xFloor, _2] = hull.findCriticalVertexFromFloor(hull);
         
         double gap = computeGap(xCeil);
         gap = std::min(gap, computeGap(xFloor));
@@ -231,10 +217,19 @@ public:
     }
     
 private:
+    /**
+     * @brief Compute the gap between ceiling and floor at x.
+     * 
+     * Ceiling = lower hull + epsilon (upper boundary of epsilon band)
+     * Floor = upper hull - epsilon (lower boundary of epsilon band)
+     * Gap = ceiling - floor = (lower hull + ε) - (upper hull - ε) = lower hull - upper hull + 2ε
+     */
     double computeGap(double x) const {
-        double yCeiling = ceiling.evaluateLowerHullAt(x);
-        double yFloor = floor.evaluateUpperHullAt(x);
-        return yCeiling - yFloor;
+        double yLower = hull.evaluateLowerHullAt(x);
+        double yUpper = hull.evaluateUpperHullAt(x);
+        // Ceiling = yLower + epsilon, Floor = yUpper - epsilon
+        // Gap = ceiling - floor = (yLower + ε) - (yUpper - ε) = yLower - yUpper + 2ε
+        return (yLower + epsilon) - (yUpper - epsilon);
     }
 };
 

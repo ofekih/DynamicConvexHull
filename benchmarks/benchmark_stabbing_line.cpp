@@ -126,4 +126,54 @@ BENCHMARK(BM_GetMinimumGap)
     ->Range(64, 1 << 18)
     ->Complexity();
 
+// Benchmark: split operation
+static void BM_Split(benchmark::State& state) {
+    const int n = state.range(0);
+    auto points = generateNearLinePoints(n);
+    
+    for (auto _ : state) {
+        state.PauseTiming();
+        SLS sls(0.5);
+        sls.build(points);
+        state.ResumeTiming();
+        
+        auto right = sls.split(n * 0.05 / 2);  // Split at midpoint
+        benchmark::DoNotOptimize(right);
+    }
+    
+    state.SetComplexityN(n);
+}
+BENCHMARK(BM_Split)
+    ->RangeMultiplier(2)
+    ->Range(64, 1 << 18)
+    ->Complexity();
+
+// Benchmark: join operation
+static void BM_Join(benchmark::State& state) {
+    const int n = state.range(0);
+    auto points = generateNearLinePoints(n);
+    
+    // Build and split once to get two halves
+    SLS original(0.5);
+    original.build(points);
+    
+    for (auto _ : state) {
+        state.PauseTiming();
+        SLS left(0.5);
+        left.build(std::vector<Point_2>(points.begin(), points.begin() + n/2));
+        SLS right(0.5);
+        right.build(std::vector<Point_2>(points.begin() + n/2, points.end()));
+        state.ResumeTiming();
+        
+        left.join(right);
+        benchmark::DoNotOptimize(left);
+    }
+    
+    state.SetComplexityN(n);
+}
+BENCHMARK(BM_Join)
+    ->RangeMultiplier(2)
+    ->Range(64, 1 << 18)
+    ->Complexity();
+
 BENCHMARK_MAIN();
