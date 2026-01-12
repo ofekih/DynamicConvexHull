@@ -2,13 +2,15 @@
 // Tests various sizes to find threshold where it breaks
 
 #include <gtest/gtest.h>
-#include <CGAL/Simple_cartesian.h>
 #include "CHTree.h"
+#include "inexact.h"
 #include "hull_test_helpers.hpp"
 #include <random>
 #include <iostream>
 
-using K = CGAL::Simple_cartesian<double>;
+using namespace dch;
+
+using K = Inexact_kernel<double>;
 using Point_2 = K::Point_2;
 
 // Generate n sorted random points with seed
@@ -35,8 +37,8 @@ bool verifyHull(CHTree<K>& tree, const std::vector<Point_2>& points) {
     auto expected_lower = hull_helpers::adjustLowerHullForCHTree(
         monotone_chain::lowerHull(hull_helpers::toIntPairs(points)));
     
-    auto ch_upper = hull_helpers::toIntPairs(tree.upperHullPoints());
-    auto ch_lower = hull_helpers::toIntPairs(tree.lowerHullPoints());
+    auto ch_upper = hull_helpers::toIntPairs(tree.UpperHullPoints());
+    auto ch_lower = hull_helpers::toIntPairs(tree.LowerHullPoints());
     
     return hull_helpers::hullContainsAll(expected_upper, ch_upper) &&
            hull_helpers::hullContainsAll(expected_lower, ch_lower);
@@ -48,7 +50,7 @@ void printHulls(CHTree<K>& tree, const std::vector<Point_2>& points) {
     auto exp_upper = monotone_chain::upperHull(hull_helpers::toIntPairs(points));
     for (auto& p : exp_upper) std::cerr << "(" << p.first << "," << p.second << ") ";
     std::cerr << "\nActual upper hull: ";
-    auto act_upper = tree.upperHullPoints();
+    auto act_upper = tree.UpperHullPoints();
     for (auto& p : act_upper) std::cerr << "(" << p.x() << "," << p.y() << ") ";
     std::cerr << "\n";
     
@@ -56,7 +58,7 @@ void printHulls(CHTree<K>& tree, const std::vector<Point_2>& points) {
     auto exp_lower = monotone_chain::lowerHull(hull_helpers::toIntPairs(points));
     for (auto& p : exp_lower) std::cerr << "(" << p.first << "," << p.second << ") ";
     std::cerr << "\nActual lower hull: ";
-    auto act_lower = tree.lowerHullPoints();
+    auto act_lower = tree.LowerHullPoints();
     for (auto& p : act_lower) std::cerr << "(" << p.x() << "," << p.y() << ") ";
     std::cerr << "\n";
 }
@@ -69,9 +71,9 @@ TEST(Debug, FindMinimalFailingSize) {
     for (int n = 10; n <= 100; n += 5) {
         auto points = genPoints(n, seed);
         CHTree<K> tree;
-        tree.build(points);
+        tree.Build(points);
         
-        auto right = tree.split(splitX);
+        auto right = tree.Split(splitX);
         
         // Separate points
         std::vector<Point_2> leftPoints, rightPoints;
@@ -118,7 +120,7 @@ TEST(Debug, SmallestFailingCase) {
     }
     
     CHTree<K> tree;
-    tree.build(points);
+    tree.Build(points);
     
     // Separate expected points
     std::vector<Point_2> leftPoints, rightPoints;
@@ -128,30 +130,30 @@ TEST(Debug, SmallestFailingCase) {
     }
     
     std::cerr << "\n=== Before split ===\n";
-    std::cerr << "Tree size: " << tree.size() << "\n";
+    std::cerr << "Tree size: " << tree.Size() << "\n";
     std::cerr << "Expected left: " << leftPoints.size() << ", right: " << rightPoints.size() << "\n";
     
-    auto right = tree.split(splitX);
+    auto right = tree.Split(splitX);
     
     std::cerr << "\n=== After split ===\n";
-    std::cerr << "Left tree size: " << tree.size() << " (expected " << leftPoints.size() << ")\n";
-    std::cerr << "Right tree size: " << right.size() << " (expected " << rightPoints.size() << ")\n";
+    std::cerr << "Left tree size: " << tree.Size() << " (expected " << leftPoints.size() << ")\n";
+    std::cerr << "Right tree size: " << right.Size() << " (expected " << rightPoints.size() << ")\n";
     
 
     
     // Check sizes first
-    ASSERT_EQ(tree.size(), leftPoints.size()) << "Left tree has wrong number of points!";
-    ASSERT_EQ(right.size(), rightPoints.size()) << "Right tree has wrong number of points!";
+    ASSERT_EQ(tree.Size(), leftPoints.size()) << "Left tree has wrong number of points!";
+    ASSERT_EQ(right.Size(), rightPoints.size()) << "Right tree has wrong number of points!";
     
     // Structural Validation
     std::cerr << "\n=== Structural Validation ===\n";
-    if (!hull_helpers::validateTreeInvariants(tree.getRoot())) {
+    if (!hull_helpers::validateTreeInvariants(tree.GetRoot())) {
         FAIL() << "Left tree (tree) validation failed!";
     } else {
         std::cerr << "Left tree structure valid.\n";
     }
     
-    if (!hull_helpers::validateTreeInvariants(right.getRoot())) {
+    if (!hull_helpers::validateTreeInvariants(right.GetRoot())) {
         FAIL() << "Right tree (right) validation failed!";
     } else {
         std::cerr << "Right tree structure valid.\n";
@@ -219,10 +221,10 @@ TEST(Debug, FindMinimalStressFailure) {
             });
             
             CHTree<K> tree;
-            tree.build(points);
+            tree.Build(points);
             
             // Check initial build
-            if (!tree.validateBridges()) {
+            if (!tree.ValidateBridges()) {
                 std::cerr << "FOUND: Build failed at seed=" << seed << ", n=" << n << "\n";
                 FAIL() << "Initial build has invalid bridges";
             }
@@ -234,19 +236,19 @@ TEST(Debug, FindMinimalStressFailure) {
                 double splitX = splitDist(rng);
                 
                 // Validate before split
-                bool validBefore = tree.validateBridges();
+                bool validBefore = tree.ValidateBridges();
                 bool correctBefore = verifyHull(tree, points);
                 
-                auto right = tree.split(splitX);
+                auto right = tree.Split(splitX);
                 
                 // Validate after split
-                bool validAfterLeft = tree.validateBridges();
-                bool validAfterRight = right.validateBridges();
+                bool validAfterLeft = tree.ValidateBridges();
+                bool validAfterRight = right.ValidateBridges();
                 
-                tree.join(right);
+                tree.Join(right);
                 
                 // Validate after join
-                bool validAfterJoin = tree.validateBridges();
+                bool validAfterJoin = tree.ValidateBridges();
                 bool correctAfterJoin = verifyHull(tree, points);
                 
                 // Check for first failure
@@ -294,7 +296,7 @@ TEST(Debug, DetailedStressDebug) {
     });
     
     CHTree<K> tree;
-    tree.build(points);
+    tree.Build(points);
     
     std::uniform_int_distribution<int> splitDist(-1000, 1000);
     
@@ -305,7 +307,7 @@ TEST(Debug, DetailedStressDebug) {
         double splitX = splitDist(rng);
         
         // Check state BEFORE operation
-        bool bridgesValidBefore = tree.validateBridges();
+        bool bridgesValidBefore = tree.ValidateBridges();
         bool hullCorrectBefore = verifyHull(tree, points);
         
         std::cerr << "Iter " << iter << ": splitX=" << splitX 
@@ -315,35 +317,35 @@ TEST(Debug, DetailedStressDebug) {
         if (!bridgesValidBefore) {
             std::cerr << "*** Bridges already invalid BEFORE iter " << iter << "! ***\n";
             std::cerr << "Tree structure:\n";
-            printTreeStructure(tree.getRoot());
+            printTreeStructure(tree.GetRoot());
             FAIL() << "Bridges invalid before iter " << iter;
         }
         
         // Perform split
-        auto right = tree.split(splitX);
+        auto right = tree.Split(splitX);
         
         // Check after split
-        bool leftBridgesOK = tree.validateBridges();
-        bool rightBridgesOK = right.validateBridges();
+        bool leftBridgesOK = tree.ValidateBridges();
+        bool rightBridgesOK = right.ValidateBridges();
         
         if (!leftBridgesOK || !rightBridgesOK) {
             std::cerr << "*** Split at iter " << iter << " corrupted bridges! ***\n";
             std::cerr << "leftBridgesOK=" << leftBridgesOK << ", rightBridgesOK=" << rightBridgesOK << "\n";
             if (!leftBridgesOK) {
                 std::cerr << "Left tree structure:\n";
-                printTreeStructure(tree.getRoot());
+                printTreeStructure(tree.GetRoot());
             }
             if (!rightBridgesOK) {
                 std::cerr << "Right tree structure:\n";
-                printTreeStructure(right.getRoot());
+                printTreeStructure(right.GetRoot());
             }
         }
         
         // Perform join
-        tree.join(right);
+        tree.Join(right);
         
         // Check after join
-        bool bridgesValidAfter = tree.validateBridges();
+        bool bridgesValidAfter = tree.ValidateBridges();
         bool hullCorrectAfter = verifyHull(tree, points);
         
         if (!bridgesValidAfter || !hullCorrectAfter) {
@@ -357,7 +359,7 @@ TEST(Debug, DetailedStressDebug) {
             
             if (!bridgesValidAfter) {
                 std::cerr << "Tree structure after failed join:\n";
-                printTreeStructure(tree.getRoot());
+                printTreeStructure(tree.GetRoot());
             }
             
             FAIL() << "Failed at iter " << iter;
@@ -395,10 +397,10 @@ TEST(Debug, TargetedMinimalCase) {
     }
     
     CHTree<K> tree;
-    tree.build(points);
+    tree.Build(points);
     
     std::cerr << "\n=== Initial tree ===\n";
-    printTreeStructure(tree.getRoot());
+    printTreeStructure(tree.GetRoot());
     
     std::uniform_int_distribution<int> splitDist(-1000, 1000);
     
@@ -411,31 +413,31 @@ TEST(Debug, TargetedMinimalCase) {
         
         // State before split
         std::cerr << "\n--- BEFORE SPLIT ---\n";
-        std::cerr << "Tree size: " << tree.size() << "\n";
-        std::cerr << "validateBridges: " << tree.validateBridges() << "\n";
+        std::cerr << "Tree size: " << tree.Size() << "\n";
+        std::cerr << "validateBridges: " << tree.ValidateBridges() << "\n";
         std::cerr << "verifyHull: " << verifyHull(tree, points) << "\n";
         
         // Perform split
-        auto right = tree.split(splitX);
+        auto right = tree.Split(splitX);
         
         std::cerr << "\n--- AFTER SPLIT ---\n";
-        std::cerr << "Left size: " << tree.size() << ", Right size: " << right.size() << "\n";
-        std::cerr << "Left validateBridges: " << tree.validateBridges() << "\n";
-        std::cerr << "Right validateBridges: " << right.validateBridges() << "\n";
+        std::cerr << "Left size: " << tree.Size() << ", Right size: " << right.Size() << "\n";
+        std::cerr << "Left validateBridges: " << tree.ValidateBridges() << "\n";
+        std::cerr << "Right validateBridges: " << right.ValidateBridges() << "\n";
         
         // State before join
         std::cerr << "\n--- BEFORE JOIN ---\n";
         std::cerr << "Left tree:\n";
-        printTreeStructure(tree.getRoot());
+        printTreeStructure(tree.GetRoot());
         std::cerr << "\nRight tree:\n";
-        printTreeStructure(right.getRoot());
+        printTreeStructure(right.GetRoot());
         
         // Perform join
-        tree.join(right);
+        tree.Join(right);
         
         std::cerr << "\n--- AFTER JOIN ---\n";
-        std::cerr << "Tree size: " << tree.size() << "\n";
-        std::cerr << "validateBridges: " << tree.validateBridges() << "\n";
+        std::cerr << "Tree size: " << tree.Size() << "\n";
+        std::cerr << "validateBridges: " << tree.ValidateBridges() << "\n";
         
         bool correct = verifyHull(tree, points);
         std::cerr << "verifyHull: " << correct << "\n";
@@ -443,7 +445,7 @@ TEST(Debug, TargetedMinimalCase) {
         if (!correct) {
             std::cerr << "\n*** HULL FAILED AT ITER " << iter << " ***\n";
             std::cerr << "\nTree structure after failed join:\n";
-            printTreeStructure(tree.getRoot());
+            printTreeStructure(tree.GetRoot());
             
             std::cerr << "\nHull comparison:\n";
             printHulls(tree, points);

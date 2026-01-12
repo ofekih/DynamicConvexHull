@@ -12,6 +12,8 @@
 #include "hull_test_helpers.hpp"
 #include "inexact.h"
 
+using namespace dch;
+
 using K = Inexact_kernel<double>;
 using Point_2 = K::Point_2;
 
@@ -34,8 +36,8 @@ bool verifyHullCorrectness(CHTree<K>& tree, const std::vector<Point_2>& points) 
     auto expected_lower = hull_helpers::adjustLowerHullForCHTree(
         monotone_chain::lowerHull(hull_helpers::toIntPairs(points)));
     
-    auto ch_upper = hull_helpers::toIntPairs(tree.upperHullPoints());
-    auto ch_lower = hull_helpers::toIntPairs(tree.lowerHullPoints());
+    auto ch_upper = hull_helpers::toIntPairs(tree.UpperHullPoints());
+    auto ch_lower = hull_helpers::toIntPairs(tree.LowerHullPoints());
 
     // Check lower hull
     if (!hull_helpers::hullContainsAll(expected_lower, ch_lower)) {
@@ -76,62 +78,62 @@ std::vector<Point_2> generateSortedRandomPoints(std::mt19937& rng, int n, int ra
 
 TEST(SplitMerge, SplitEmpty) {
     CHTree<K> tree;
-    auto right = tree.split(0.0);
-    EXPECT_TRUE(tree.empty());
-    EXPECT_TRUE(right.empty());
+    auto right = tree.Split(0.0);
+    EXPECT_TRUE(tree.Empty());
+    EXPECT_TRUE(right.Empty());
 }
 
 TEST(SplitMerge, SplitSinglePointLeft) {
     CHTree<K> tree;
-    tree.insert(Point_2(50, 50));
+    tree.Insert(Point_2(50, 50));
     
     // Split to the left of the point - point goes to right tree
-    auto right = tree.split(0.0);
-    EXPECT_TRUE(tree.empty());
-    EXPECT_EQ(right.size(), 1u);
+    auto right = tree.Split(0.0);
+    EXPECT_TRUE(tree.Empty());
+    EXPECT_EQ(right.Size(), 1u);
 }
 
 TEST(SplitMerge, SplitSinglePointRight) {
     CHTree<K> tree;
-    tree.insert(Point_2(50, 50));
+    tree.Insert(Point_2(50, 50));
     
     // Split to the right of the point - point stays in left tree
-    auto right = tree.split(100.0);
-    EXPECT_EQ(tree.size(), 1u);
-    EXPECT_TRUE(right.empty());
+    auto right = tree.Split(100.0);
+    EXPECT_EQ(tree.Size(), 1u);
+    EXPECT_TRUE(right.Empty());
 }
 
 TEST(SplitMerge, SplitSinglePointExact) {
     CHTree<K> tree;
-    tree.insert(Point_2(50, 50));
+    tree.Insert(Point_2(50, 50));
     
     // Split at exact x-coordinate - point goes to right tree (>= semantics)
-    auto right = tree.split(50.0);
-    EXPECT_TRUE(tree.empty());
-    EXPECT_EQ(right.size(), 1u);
+    auto right = tree.Split(50.0);
+    EXPECT_TRUE(tree.Empty());
+    EXPECT_EQ(right.Size(), 1u);
 }
 
 TEST(SplitMerge, SplitTwoPoints) {
     CHTree<K> tree;
-    tree.insert(Point_2(10, 10));
-    tree.insert(Point_2(90, 90));
+    tree.Insert(Point_2(10, 10));
+    tree.Insert(Point_2(90, 90));
     
     // Split in the middle
-    auto right = tree.split(50.0);
-    EXPECT_EQ(tree.size(), 1u);
-    EXPECT_EQ(right.size(), 1u);
+    auto right = tree.Split(50.0);
+    EXPECT_EQ(tree.Size(), 1u);
+    EXPECT_EQ(right.Size(), 1u);
 }
 
 TEST(SplitMerge, SplitThreePointsMiddle) {
     CHTree<K> tree;
-    tree.insert(Point_2(0, 0));
-    tree.insert(Point_2(50, 100));
-    tree.insert(Point_2(100, 0));
+    tree.Insert(Point_2(0, 0));
+    tree.Insert(Point_2(50, 100));
+    tree.Insert(Point_2(100, 0));
     
     // Split in the middle - left gets (0,0), right gets (50,100) and (100,0)
-    auto right = tree.split(25.0);
-    EXPECT_EQ(tree.size(), 1u);
-    EXPECT_EQ(right.size(), 2u);
+    auto right = tree.Split(25.0);
+    EXPECT_EQ(tree.Size(), 1u);
+    EXPECT_EQ(right.Size(), 2u);
 }
 
 // ============================================================================
@@ -140,41 +142,41 @@ TEST(SplitMerge, SplitThreePointsMiddle) {
 
 TEST(SplitMerge, JoinEmpty) {
     CHTree<K> left;
-    left.insert(Point_2(0, 0));
-    left.insert(Point_2(10, 10));
+    left.Insert(Point_2(0, 0));
+    left.Insert(Point_2(10, 10));
     
     CHTree<K> empty;
-    left.join(empty);
+    left.Join(empty);
     
-    EXPECT_EQ(left.size(), 2u);
-    EXPECT_TRUE(empty.empty());
+    EXPECT_EQ(left.Size(), 2u);
+    EXPECT_TRUE(empty.Empty());
 }
 
 TEST(SplitMerge, JoinIntoEmpty) {
     CHTree<K> empty;
     CHTree<K> right;
-    right.insert(Point_2(100, 0));
-    right.insert(Point_2(200, 100));
+    right.Insert(Point_2(100, 0));
+    right.Insert(Point_2(200, 100));
     
-    empty.join(right);
+    empty.Join(right);
     
-    EXPECT_EQ(empty.size(), 2u);
-    EXPECT_TRUE(right.empty());
+    EXPECT_EQ(empty.Size(), 2u);
+    EXPECT_TRUE(right.Empty());
 }
 
 TEST(SplitMerge, BasicJoin) {
     CHTree<K> left;
-    left.insert(Point_2(0, 0));
-    left.insert(Point_2(10, 50));
+    left.Insert(Point_2(0, 0));
+    left.Insert(Point_2(10, 50));
     
     CHTree<K> right;
-    right.insert(Point_2(100, 0));
-    right.insert(Point_2(110, 50));
+    right.Insert(Point_2(100, 0));
+    right.Insert(Point_2(110, 50));
     
-    left.join(right);
+    left.Join(right);
     
-    EXPECT_EQ(left.size(), 4u);
-    EXPECT_TRUE(right.empty());
+    EXPECT_EQ(left.Size(), 4u);
+    EXPECT_TRUE(right.Empty());
 }
 
 // ============================================================================
@@ -186,11 +188,11 @@ TEST(SplitMerge, SplitPreservesHullGeometry_Small) {
     auto points = generateSortedRandomPoints(rng, 20, 100);
     
     CHTree<K> tree;
-    tree.build(points);
+    tree.Build(points);
     
     // Split in the middle
     double splitX = 0.0;  // Middle of -100 to 100 range
-    auto right = tree.split(splitX);
+    auto right = tree.Split(splitX);
     
     // Separate points into left and right based on split
     std::vector<Point_2> leftPoints, rightPoints;
@@ -211,8 +213,8 @@ TEST(SplitMerge, SplitPreservesHullGeometry_Small) {
     }
     
     // Verify sizes match
-    EXPECT_EQ(tree.size(), leftPoints.size());
-    EXPECT_EQ(right.size(), rightPoints.size());
+    EXPECT_EQ(tree.Size(), leftPoints.size());
+    EXPECT_EQ(right.Size(), rightPoints.size());
 }
 
 TEST(SplitMerge, SplitPreservesHullGeometry_Large) {
@@ -220,16 +222,16 @@ TEST(SplitMerge, SplitPreservesHullGeometry_Large) {
     auto points = generateSortedRandomPoints(rng, 500, 1000);
     
     CHTree<K> tree;
-    tree.build(points);
+    tree.Build(points);
     
     // Split at multiple positions
     std::vector<double> splitPositions = {-500.0, -250.0, 0.0, 250.0, 500.0};
     
     for (double splitX : splitPositions) {
         CHTree<K> testTree;
-        testTree.build(points);
+        testTree.Build(points);
         
-        auto right = testTree.split(splitX);
+        auto right = testTree.Split(splitX);
         
         std::vector<Point_2> leftPoints, rightPoints;
         for (const auto& p : points) {
@@ -256,10 +258,10 @@ TEST(SplitMerge, SplitVerifyCovers) {
     auto points = generateSortedRandomPoints(rng, 100, 200);
     
     CHTree<K> original;
-    original.build(points);
+    original.Build(points);
     
     double splitX = 0.0;
-    auto right = original.split(splitX);
+    auto right = original.Split(splitX);
     
     // Test cover queries on both split parts
     for (const auto& p : points) {
@@ -274,7 +276,7 @@ TEST(SplitMerge, SplitVerifyCovers) {
     }
     
     // Verify the trees are independent - should work without errors
-    EXPECT_GE(original.size() + right.size(), 0u);
+    EXPECT_GE(original.Size() + right.Size(), 0u);
 }
 
 // ============================================================================
@@ -296,11 +298,11 @@ TEST(SplitMerge, JoinPreservesHullGeometry_Small) {
     }
     
     CHTree<K> left, right;
-    left.build(leftPoints);
-    right.build(rightPoints);
+    left.Build(leftPoints);
+    right.Build(rightPoints);
     
     // Join and verify
-    left.join(right);
+    left.Join(right);
     
     std::vector<Point_2> allPoints = leftPoints;
     allPoints.insert(allPoints.end(), rightPoints.begin(), rightPoints.end());
@@ -309,7 +311,7 @@ TEST(SplitMerge, JoinPreservesHullGeometry_Small) {
         return a.y() < b.y();
     });
     
-    EXPECT_EQ(left.size(), allPoints.size());
+    EXPECT_EQ(left.Size(), allPoints.size());
     EXPECT_TRUE(verifyHullCorrectness(left, allPoints));
 }
 
@@ -338,10 +340,10 @@ TEST(SplitMerge, JoinPreservesHullGeometry_Large) {
     });
     
     CHTree<K> left, right;
-    left.build(leftPoints);
-    right.build(rightPoints);
+    left.Build(leftPoints);
+    right.Build(rightPoints);
     
-    left.join(right);
+    left.Join(right);
     
     std::vector<Point_2> allPoints = leftPoints;
     allPoints.insert(allPoints.end(), rightPoints.begin(), rightPoints.end());
@@ -350,7 +352,7 @@ TEST(SplitMerge, JoinPreservesHullGeometry_Large) {
         return a.y() < b.y();
     });
     
-    EXPECT_EQ(left.size(), allPoints.size());
+    EXPECT_EQ(left.Size(), allPoints.size());
     EXPECT_TRUE(verifyHullCorrectness(left, allPoints));
 }
 
@@ -366,10 +368,10 @@ TEST(SplitMerge, JoinVerifyCovers) {
         rightPoints.emplace_back(100 + i * 3, rng() % 100 - 50);
     }
     
-    left.build(leftPoints);
-    right.build(rightPoints);
+    left.Build(leftPoints);
+    right.Build(rightPoints);
     
-    left.join(right);
+    left.Join(right);
     
     // Build reference tree with all points
     std::vector<Point_2> allPoints = leftPoints;
@@ -380,13 +382,13 @@ TEST(SplitMerge, JoinVerifyCovers) {
     });
     
     CHTree<K> reference;
-    reference.build(allPoints);
+    reference.Build(allPoints);
     
     // Verify covers() returns the same results
     std::uniform_int_distribution<int> dist(-200, 300);
     for (int i = 0; i < 100; i++) {
         Point_2 query(dist(rng), dist(rng));
-        EXPECT_EQ(left.covers(query), reference.covers(query)) 
+        EXPECT_EQ(left.Covers(query), reference.Covers(query)) 
             << "covers() mismatch for point (" << query.x() << ", " << query.y() << ")";
     }
 }
@@ -400,19 +402,19 @@ TEST(SplitMerge, SplitThenJoin_Basic) {
     auto points = generateSortedRandomPoints(rng, 50, 200);
     
     CHTree<K> tree;
-    tree.build(points);
+    tree.Build(points);
     
     // Split at x = 0
-    auto right = tree.split(0.0);
-    size_t leftSize = tree.size();
-    size_t rightSize = right.size();
+    auto right = tree.Split(0.0);
+    size_t leftSize = tree.Size();
+    size_t rightSize = right.Size();
     
     EXPECT_EQ(leftSize + rightSize, points.size());
     
     // Join back together
-    tree.join(right);
+    tree.Join(right);
     
-    EXPECT_EQ(tree.size(), points.size());
+    EXPECT_EQ(tree.Size(), points.size());
     EXPECT_TRUE(verifyHullCorrectness(tree, points));
 }
 
@@ -421,21 +423,21 @@ TEST(SplitMerge, SplitThenJoin_Large) {
     auto points = generateSortedRandomPoints(rng, 500, 1000);
     
     CHTree<K> tree;
-    tree.build(points);
+    tree.Build(points);
     
     // Split at multiple x-coordinates and rejoin
     std::vector<double> splitPoints = {-500.0, -200.0, 0.0, 200.0};
     
     for (double splitX : splitPoints) {
         CHTree<K> testTree;
-        testTree.build(points);
+        testTree.Build(points);
         
-        auto right = testTree.split(splitX);
+        auto right = testTree.Split(splitX);
         
         // Join back
-        testTree.join(right);
+        testTree.Join(right);
         
-        EXPECT_EQ(testTree.size(), points.size()) << "Size mismatch after split at " << splitX;
+        EXPECT_EQ(testTree.Size(), points.size()) << "Size mismatch after split at " << splitX;
         EXPECT_TRUE(verifyHullCorrectness(testTree, points)) << "Hull incorrect after split at " << splitX;
     }
 }
@@ -445,22 +447,22 @@ TEST(SplitMerge, MultipleSplitsAndJoins) {
     auto points = generateSortedRandomPoints(rng, 100, 500);
     
     CHTree<K> tree;
-    tree.build(points);
+    tree.Build(points);
     
     // Split into 4 parts
-    auto part2 = tree.split(-250.0);   // tree: x < -250, part2: x >= -250
-    auto part3 = part2.split(0.0);      // part2: -250 <= x < 0, part3: x >= 0
-    auto part4 = part3.split(250.0);    // part3: 0 <= x < 250, part4: x >= 250
+    auto part2 = tree.Split(-250.0);   // tree: x < -250, part2: x >= -250
+    auto part3 = part2.Split(0.0);      // part2: -250 <= x < 0, part3: x >= 0
+    auto part4 = part3.Split(250.0);    // part3: 0 <= x < 250, part4: x >= 250
     
-    size_t totalSize = tree.size() + part2.size() + part3.size() + part4.size();
+    size_t totalSize = tree.Size() + part2.Size() + part3.Size() + part4.Size();
     EXPECT_EQ(totalSize, points.size());
     
     // Join all back together (in order!)
-    tree.join(part2);   // tree now has x < 0
-    tree.join(part3);   // tree now has x < 250
-    tree.join(part4);   // tree now has all points
+    tree.Join(part2);   // tree now has x < 0
+    tree.Join(part3);   // tree now has x < 250
+    tree.Join(part4);   // tree now has all points
     
-    EXPECT_EQ(tree.size(), points.size());
+    EXPECT_EQ(tree.Size(), points.size());
     EXPECT_TRUE(verifyHullCorrectness(tree, points));
 }
 
@@ -473,25 +475,25 @@ TEST(SplitMerge, StressTest_RandomSplitJoin) {
     auto points = generateSortedRandomPoints(rng, 500, 1000);
     
     CHTree<K> tree;
-    tree.build(points);
+    tree.Build(points);
     
     std::uniform_int_distribution<int> splitDist(-1000, 1000);
     
     // Perform 50 random split-rejoin operations
     for (int i = 0; i < 50; i++) {
         double splitX = splitDist(rng);
-        auto right = tree.split(splitX);
-        tree.join(right);
+        auto right = tree.Split(splitX);
+        tree.Join(right);
         
-        ASSERT_EQ(tree.size(), points.size()) << "Size mismatch at iteration " << i;
+        ASSERT_EQ(tree.Size(), points.size()) << "Size mismatch at iteration " << i;
         
         // Structural Validation
-        if (!hull_helpers::validateTreeInvariants(tree.getRoot())) {
+        if (!hull_helpers::validateTreeInvariants(tree.GetRoot())) {
              FAIL() << "Structural invariant failed at iteration " << i;
         }
         
         // Deep Bridge Validation
-        if (!tree.validateBridges()) {
+        if (!tree.ValidateBridges()) {
              FAIL() << "Bridge validation failed at iteration " << i;
         }
 
@@ -513,16 +515,16 @@ TEST(SplitMerge, StressTest_LargeHullSplit) {
     auto points = generateSortedRandomPoints(rng, 2000, 10000);
     
     CHTree<K> tree;
-    tree.build(points);
+    tree.Build(points);
     
     auto start = std::chrono::high_resolution_clock::now();
     
     // Split into halves multiple times
     for (int i = 0; i < 20; i++) {
         CHTree<K> testTree;
-        testTree.build(points);
-        auto right = testTree.split(0.0);
-        EXPECT_EQ(testTree.size() + right.size(), points.size());
+        testTree.Build(points);
+        auto right = testTree.Split(0.0);
+        EXPECT_EQ(testTree.Size() + right.Size(), points.size());
     }
     
     auto end = std::chrono::high_resolution_clock::now();
@@ -557,10 +559,10 @@ TEST(SplitMerge, StressTest_LargeHullJoin) {
     // Join multiple times
     for (int i = 0; i < 20; i++) {
         CHTree<K> left, right;
-        left.build(leftPoints);
-        right.build(rightPoints);
-        left.join(right);
-        EXPECT_EQ(left.size(), leftPoints.size() + rightPoints.size());
+        left.Build(leftPoints);
+        right.Build(rightPoints);
+        left.Join(right);
+        EXPECT_EQ(left.Size(), leftPoints.size() + rightPoints.size());
     }
     
     auto end = std::chrono::high_resolution_clock::now();
@@ -581,16 +583,16 @@ TEST(SplitMerge, SplitComplexity) {
         auto points = generateSortedRandomPoints(rng, n, n * 10);
         
         CHTree<K> tree;
-        tree.build(points);
+        tree.Build(points);
         
         const int numTrials = 50;
         
         auto start = std::chrono::high_resolution_clock::now();
         for (int t = 0; t < numTrials; t++) {
             CHTree<K> testTree;
-            testTree.build(points);
-            auto right = testTree.split(0.0);
-            volatile size_t dummy = testTree.size() + right.size();
+            testTree.Build(points);
+            auto right = testTree.Split(0.0);
+            volatile size_t dummy = testTree.Size() + right.Size();
             (void)dummy;
         }
         auto end = std::chrono::high_resolution_clock::now();
@@ -651,10 +653,10 @@ TEST(SplitMerge, JoinComplexity) {
         auto start = std::chrono::high_resolution_clock::now();
         for (int t = 0; t < numTrials; t++) {
             CHTree<K> left, right;
-            left.build(leftPoints);
-            right.build(rightPoints);
-            left.join(right);
-            volatile size_t dummy = left.size();
+            left.Build(leftPoints);
+            right.Build(rightPoints);
+            left.Join(right);
+            volatile size_t dummy = left.Size();
             (void)dummy;
         }
         auto end = std::chrono::high_resolution_clock::now();
@@ -692,20 +694,20 @@ TEST(SplitMerge, SplitAtExactPoints) {
     for (int x = 0; x <= 100; x += 10) {
         points.emplace_back(x, x);
     }
-    tree.build(points);
+    tree.Build(points);
     
     // Split at exact x-coordinates
     for (int x = 0; x <= 100; x += 10) {
         CHTree<K> testTree;
-        testTree.build(points);
+        testTree.Build(points);
         
-        auto right = testTree.split(x);
+        auto right = testTree.Split(x);
         
         size_t expectedLeft = x / 10;  // Points with x < splitX
         size_t expectedRight = points.size() - expectedLeft;
         
-        EXPECT_EQ(testTree.size(), expectedLeft) << "Left size mismatch at x=" << x;
-        EXPECT_EQ(right.size(), expectedRight) << "Right size mismatch at x=" << x;
+        EXPECT_EQ(testTree.Size(), expectedLeft) << "Left size mismatch at x=" << x;
+        EXPECT_EQ(right.Size(), expectedRight) << "Right size mismatch at x=" << x;
     }
 }
 
@@ -728,13 +730,13 @@ TEST(SplitMerge, JoinManySmallHulls) {
             if (a.x() != b.x()) return a.x() < b.x();
             return a.y() < b.y();
         });
-        hull->build(pts);
+        hull->Build(pts);
         hulls.push_back(std::move(hull));
     }
     
     // Join all hulls into the first one
     for (size_t i = 1; i < hulls.size(); i++) {
-        hulls[0]->join(*hulls[i]);
+        hulls[0]->Join(*hulls[i]);
     }
     
     std::sort(allPoints.begin(), allPoints.end(), [](const auto& a, const auto& b) {
@@ -742,7 +744,7 @@ TEST(SplitMerge, JoinManySmallHulls) {
         return a.y() < b.y();
     });
     
-    EXPECT_EQ(hulls[0]->size(), allPoints.size());
+    EXPECT_EQ(hulls[0]->Size(), allPoints.size());
     EXPECT_TRUE(verifyHullCorrectness(*hulls[0], allPoints));
 }
 
@@ -751,30 +753,30 @@ TEST(SplitMerge, SplitIntoManyParts) {
     auto points = generateSortedRandomPoints(rng, 100, 1000);
     
     CHTree<K> tree;
-    tree.build(points);
+    tree.Build(points);
     
     // Split into 10 parts
     std::vector<CHTree<K>> parts;
     parts.push_back(std::move(tree));
     
     for (int splitX = -800; splitX <= 600; splitX += 200) {
-        auto right = parts.back().split(splitX);
+        auto right = parts.back().Split(splitX);
         parts.push_back(std::move(right));
     }
     
     // Count total points
     size_t total = 0;
     for (const auto& part : parts) {
-        total += part.size();
+        total += part.Size();
     }
     EXPECT_EQ(total, points.size());
     
     // Join all back together
     for (size_t i = 1; i < parts.size(); i++) {
-        parts[0].join(parts[i]);
+        parts[0].Join(parts[i]);
     }
     
-    EXPECT_EQ(parts[0].size(), points.size());
+    EXPECT_EQ(parts[0].Size(), points.size());
     EXPECT_TRUE(verifyHullCorrectness(parts[0], points));
 }
 
@@ -783,9 +785,9 @@ TEST(SplitMerge, OperationsAfterSplit) {
     auto points = generateSortedRandomPoints(rng, 50, 200);
     
     CHTree<K> tree;
-    tree.build(points);
+    tree.Build(points);
     
-    auto right = tree.split(0.0);
+    auto right = tree.Split(0.0);
     
     // Insert new points into both trees
     std::vector<Point_2> leftPoints, rightPoints;
@@ -796,7 +798,7 @@ TEST(SplitMerge, OperationsAfterSplit) {
     
     // Insert into left tree
     Point_2 newLeft(-150, 0);
-    tree.insert(newLeft);
+    tree.Insert(newLeft);
     leftPoints.push_back(newLeft);
     std::sort(leftPoints.begin(), leftPoints.end(), [](const auto& a, const auto& b) {
         if (a.x() != b.x()) return a.x() < b.x();
@@ -805,7 +807,7 @@ TEST(SplitMerge, OperationsAfterSplit) {
     
     // Insert into right tree
     Point_2 newRight(250, 0);
-    right.insert(newRight);
+    right.Insert(newRight);
     rightPoints.push_back(newRight);
     std::sort(rightPoints.begin(), rightPoints.end(), [](const auto& a, const auto& b) {
         if (a.x() != b.x()) return a.x() < b.x();
@@ -839,17 +841,17 @@ TEST(SplitMerge, OperationsAfterJoin) {
         return a.y() < b.y();
     });
     
-    left.build(leftPoints);
-    right.build(rightPoints);
+    left.Build(leftPoints);
+    right.Build(rightPoints);
     
-    left.join(right);
+    left.Join(right);
     
     std::vector<Point_2> allPoints = leftPoints;
     allPoints.insert(allPoints.end(), rightPoints.begin(), rightPoints.end());
     
     // Insert and remove points
     Point_2 newPoint(0, 200);
-    left.insert(newPoint);
+    left.Insert(newPoint);
     allPoints.push_back(newPoint);
     std::sort(allPoints.begin(), allPoints.end(), [](const auto& a, const auto& b) {
         if (a.x() != b.x()) return a.x() < b.x();
@@ -859,7 +861,7 @@ TEST(SplitMerge, OperationsAfterJoin) {
     EXPECT_TRUE(verifyHullCorrectness(left, allPoints));
     
     // Remove a point
-    left.remove(newPoint);
+    left.Remove(newPoint);
     allPoints.erase(std::find(allPoints.begin(), allPoints.end(), newPoint));
     
     EXPECT_TRUE(verifyHullCorrectness(left, allPoints));
@@ -880,7 +882,7 @@ TEST(SplitMerge, RandomizedPartitionStressTest) {
     
     // Start with one big partition
     auto initialHull = std::make_unique<CHTree<K>>();
-    initialHull->build(points);
+    initialHull->Build(points);
     partitions.push_back(std::move(initialHull));
     
     std::uniform_real_distribution<double> actionDist(0.0, 1.0);
@@ -901,7 +903,7 @@ TEST(SplitMerge, RandomizedPartitionStressTest) {
             size_t idx = idxDist(rng);
             
             // Join idx+1 into idx
-            partitions[idx]->join(*partitions[idx+1]);
+            partitions[idx]->Join(*partitions[idx+1]);
             
             // Remove the empty shell of idx+1
             partitions.erase(partitions.begin() + idx + 1);
@@ -914,10 +916,10 @@ TEST(SplitMerge, RandomizedPartitionStressTest) {
             
             CHTree<K>& hull = *partitions[idx];
             
-            if (hull.size() < 2) continue; // Can't split much further
+            if (hull.Size() < 2) continue; // Can't split much further
             
             // Find min and max x of this hull to choose a split point
-            auto pts = hull.upperHullPoints(); // Just need x range
+            auto pts = hull.UpperHullPoints(); // Just need x range
             if (pts.empty()) continue;
             
             double minX = pts.front().x();
@@ -928,7 +930,7 @@ TEST(SplitMerge, RandomizedPartitionStressTest) {
             std::uniform_real_distribution<double> splitDist(minX + 0.1, maxX - 0.1);
             double splitX = splitDist(rng);
             
-            auto rightParams = hull.split(splitX);
+            auto rightParams = hull.Split(splitX);
             auto rightHull = std::make_unique<CHTree<K>>();
             // split method returns by value, we need to move it into heap object
             *rightHull = std::move(rightParams);
@@ -941,13 +943,13 @@ TEST(SplitMerge, RandomizedPartitionStressTest) {
         
         // 1. Total size check
         size_t currentTotal = 0;
-        for (const auto& p : partitions) currentTotal += p->size();
+        for (const auto& p : partitions) currentTotal += p->Size();
         ASSERT_EQ(currentTotal, NUM_POINTS) << "Total points mismatch at iteration " << i;
         
         // 2. Local Invariant Check (every 10 iterations)
         if (i % 10 == 0) {
             for (const auto& p : partitions) {
-                 ASSERT_TRUE(p->validateBridges()) << "Bridge validation failed at iter " << i;
+                 ASSERT_TRUE(p->ValidateBridges()) << "Bridge validation failed at iter " << i;
             }
         }
         
@@ -956,8 +958,8 @@ TEST(SplitMerge, RandomizedPartitionStressTest) {
         if (i % 50 == 0) {
              double lastMaxX = -std::numeric_limits<double>::infinity();
              for(const auto& p : partitions) {
-                 if (p->empty()) continue;
-                 auto uh = p->upperHullPoints();
+                 if (p->Empty()) continue;
+                 auto uh = p->UpperHullPoints();
                  if (uh.empty()) continue;
                  
                  double minX = uh.front().x();

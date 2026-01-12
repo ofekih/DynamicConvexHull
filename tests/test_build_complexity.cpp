@@ -8,6 +8,8 @@
 #include "CHTree.h"
 #include "inexact.h"
 
+using namespace dch;
+
 using K = Inexact_kernel<double>;
 using Point_2 = K::Point_2;
 
@@ -40,7 +42,7 @@ TEST(BuildComplexity, AnalyzeScaling) {
         // Warm up
         {
             CHTree<K> tree;
-            tree.build(points);
+            tree.Build(points);
         }
         
         // Measure
@@ -50,7 +52,7 @@ TEST(BuildComplexity, AnalyzeScaling) {
         for (int i = 0; i < iterations; i++) {
             auto start = std::chrono::high_resolution_clock::now();
             CHTree<K> tree;
-            tree.build(points);
+            tree.Build(points);
             auto end = std::chrono::high_resolution_clock::now();
             total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
         }
@@ -84,7 +86,7 @@ TEST(BuildComplexity, CompareWithInsert) {
         // Measure build
         auto start = std::chrono::high_resolution_clock::now();
         CHTree<K> build_tree;
-        build_tree.build(points);
+        build_tree.Build(points);
         auto end = std::chrono::high_resolution_clock::now();
         double build_time = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
         
@@ -92,7 +94,7 @@ TEST(BuildComplexity, CompareWithInsert) {
         start = std::chrono::high_resolution_clock::now();
         CHTree<K> insert_tree;
         for (const auto& p : points) {
-            insert_tree.insert(p);
+            insert_tree.Insert(p);
         }
         end = std::chrono::high_resolution_clock::now();
         double insert_time = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();

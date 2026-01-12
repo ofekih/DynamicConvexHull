@@ -10,6 +10,8 @@
 #include "hull_test_helpers.hpp"
 #include "inexact.h"
 
+using namespace dch;
+
 using K = Inexact_kernel<double>;
 using Point_2 = K::Point_2;
 
@@ -42,12 +44,12 @@ public:
     }
 
     void addPoint(int x, int y) {
-        ch->insert(Point_2(x, y));
+        ch->Insert(Point_2(x, y));
         points.push_back({x, y});
     }
 
     void removePoint(int x, int y) {
-        ch->remove(Point_2(x, y));
+        ch->Remove(Point_2(x, y));
         auto it = std::find(points.begin(), points.end(), std::make_pair(x, y));
         if (it != points.end()) points.erase(it);
     }
@@ -60,8 +62,8 @@ public:
         auto expected_lower = hull_helpers::adjustLowerHullForCHTree(
             monotone_chain::lowerHull(points));
 
-        auto ch_upper = hull_helpers::toIntPairs(ch->upperHullPoints());
-        auto ch_lower = hull_helpers::toIntPairs(ch->lowerHullPoints());
+        auto ch_upper = hull_helpers::toIntPairs(ch->UpperHullPoints());
+        auto ch_lower = hull_helpers::toIntPairs(ch->LowerHullPoints());
 
         bool upper_ok = hull_helpers::hullContainsAll(expected_upper, ch_upper);
         bool lower_ok = hull_helpers::hullContainsAll(expected_lower, ch_lower);
@@ -197,8 +199,8 @@ TEST(ConvexHullComparison, CollinearPoints_Horizontal) {
     for (int i = 0; i < 10; i++) {
         tester.addPoint(i * 10, 50);
     }
-    auto ch_upper = tester.ch->upperHullPoints();
-    auto ch_lower = tester.ch->lowerHullPoints();
+    auto ch_upper = tester.ch->UpperHullPoints();
+    auto ch_lower = tester.ch->LowerHullPoints();
     EXPECT_GE(ch_upper.size(), 1u);
     EXPECT_GE(ch_lower.size(), 1u);
 }
@@ -208,8 +210,8 @@ TEST(ConvexHullComparison, CollinearPoints_Vertical) {
     for (int i = 0; i < 10; i++) {
         tester.addPoint(50, i * 10);
     }
-    auto ch_upper = tester.ch->upperHullPoints();
-    auto ch_lower = tester.ch->lowerHullPoints();
+    auto ch_upper = tester.ch->UpperHullPoints();
+    auto ch_lower = tester.ch->LowerHullPoints();
     EXPECT_GE(ch_upper.size(), 1u);
     EXPECT_GE(ch_lower.size(), 1u);
 }
@@ -392,25 +394,25 @@ public:
         if (sorted_points.size() < 3) {
             // For very small point sets, just verify basic properties
             CHTree<K> built_tree;
-            built_tree.build(sorted_points);
-            return built_tree.size() == sorted_points.size();
+            built_tree.Build(sorted_points);
+            return built_tree.Size() == sorted_points.size();
         }
         
         // Method 1: Use build()
         CHTree<K> built_tree;
-        built_tree.build(sorted_points);
+        built_tree.Build(sorted_points);
         
         // Method 2: Use insert()
         CHTree<K> inserted_tree;
         for (const auto& p : sorted_points) {
-            inserted_tree.insert(p);
+            inserted_tree.Insert(p);
         }
         
         // Get hulls from both methods
-        auto built_upper = hull_helpers::toIntPairs(built_tree.upperHullPoints());
-        auto built_lower = hull_helpers::toIntPairs(built_tree.lowerHullPoints());
-        auto inserted_upper = hull_helpers::toIntPairs(inserted_tree.upperHullPoints());
-        auto inserted_lower = hull_helpers::toIntPairs(inserted_tree.lowerHullPoints());
+        auto built_upper = hull_helpers::toIntPairs(built_tree.UpperHullPoints());
+        auto built_lower = hull_helpers::toIntPairs(built_tree.LowerHullPoints());
+        auto inserted_upper = hull_helpers::toIntPairs(inserted_tree.UpperHullPoints());
+        auto inserted_lower = hull_helpers::toIntPairs(inserted_tree.LowerHullPoints());
         
         // Find extremal points from input
         auto int_points = hull_helpers::toIntPairs(sorted_points);
@@ -445,7 +447,7 @@ public:
         bool covers_match = true;
         for (int i = 0; i < 100; i++) {
             Point_2 query(dist(test_rng), dist(test_rng));
-            if (built_tree.covers(query) != inserted_tree.covers(query)) {
+            if (built_tree.Covers(query) != inserted_tree.Covers(query)) {
                 covers_match = false;
                 std::cerr << "covers() mismatch at (" << query.x() << "," << query.y() << ")\n";
                 break;
@@ -459,23 +461,23 @@ public:
 TEST(ConvexHullBuild, EmptyBuild) {
     CHTree<K> tree;
     std::vector<Point_2> empty;
-    tree.build(empty);
-    EXPECT_TRUE(tree.empty());
-    EXPECT_EQ(tree.size(), 0u);
+    tree.Build(empty);
+    EXPECT_TRUE(tree.Empty());
+    EXPECT_EQ(tree.Size(), 0u);
 }
 
 TEST(ConvexHullBuild, SinglePoint) {
     CHTree<K> tree;
     std::vector<Point_2> points = {Point_2(50, 50)};
-    tree.build(points);
-    EXPECT_EQ(tree.size(), 1u);
+    tree.Build(points);
+    EXPECT_EQ(tree.Size(), 1u);
 }
 
 TEST(ConvexHullBuild, TwoPoints) {
     CHTree<K> tree;
     std::vector<Point_2> points = {Point_2(0, 0), Point_2(100, 100)};
-    tree.build(points);
-    EXPECT_EQ(tree.size(), 2u);
+    tree.Build(points);
+    EXPECT_EQ(tree.Size(), 2u);
 }
 
 TEST(ConvexHullBuild, ThreePoints_Triangle) {
@@ -626,13 +628,13 @@ TEST(ConvexHullBuild, OperationsAfterBuild) {
     auto points = tester.generateRandomPoints(50, 200);
     
     CHTree<K> tree;
-    tree.build(points);
+    tree.Build(points);
     
     // Insert more points
     std::uniform_int_distribution<int> dist(-200, 200);
     for (int i = 0; i < 20; i++) {
         Point_2 p(dist(tester.rng), dist(tester.rng));
-        tree.insert(p);
+        tree.Insert(p);
         points.push_back(p);
     }
     
@@ -642,8 +644,8 @@ TEST(ConvexHullBuild, OperationsAfterBuild) {
     auto expected_lower = hull_helpers::adjustLowerHullForCHTree(
         monotone_chain::lowerHull(hull_helpers::toIntPairs(points)));
     
-    auto ch_upper = hull_helpers::toIntPairs(tree.upperHullPoints());
-    auto ch_lower = hull_helpers::toIntPairs(tree.lowerHullPoints());
+    auto ch_upper = hull_helpers::toIntPairs(tree.UpperHullPoints());
+    auto ch_lower = hull_helpers::toIntPairs(tree.LowerHullPoints());
     
     EXPECT_TRUE(hull_helpers::hullContainsAll(expected_upper, ch_upper));
     EXPECT_TRUE(hull_helpers::hullContainsAll(expected_lower, ch_lower));
@@ -655,14 +657,14 @@ TEST(ConvexHullBuild, RemovalAfterBuild) {
     auto points = tester.generateRandomPoints(100, 300);
     
     CHTree<K> tree;
-    tree.build(points);
+    tree.Build(points);
     
     // Remove some points
     std::vector<Point_2> removed;
     for (int i = 0; i < 30; i++) {
         size_t idx = tester.rng() % points.size();
         removed.push_back(points[idx]);
-        tree.remove(points[idx]);
+        tree.Remove(points[idx]);
         points.erase(points.begin() + idx);
     }
     
@@ -673,8 +675,8 @@ TEST(ConvexHullBuild, RemovalAfterBuild) {
         auto expected_lower = hull_helpers::adjustLowerHullForCHTree(
             monotone_chain::lowerHull(hull_helpers::toIntPairs(points)));
         
-        auto ch_upper = hull_helpers::toIntPairs(tree.upperHullPoints());
-        auto ch_lower = hull_helpers::toIntPairs(tree.lowerHullPoints());
+        auto ch_upper = hull_helpers::toIntPairs(tree.UpperHullPoints());
+        auto ch_lower = hull_helpers::toIntPairs(tree.LowerHullPoints());
         
         EXPECT_TRUE(hull_helpers::hullContainsAll(expected_upper, ch_upper));
         EXPECT_TRUE(hull_helpers::hullContainsAll(expected_lower, ch_lower));
@@ -688,11 +690,11 @@ TEST(ConvexHullBuild, RebuildMultipleTimes) {
         auto points = tester.generateRandomPoints(100, 500);
         
         CHTree<K> tree;
-        tree.build(points);
+        tree.Build(points);
         
         // Build again with different points
         auto new_points = tester.generateRandomPoints(150, 600);
-        tree.build(new_points);
+        tree.Build(new_points);
         
         // Verify the second build
         EXPECT_TRUE(tester.compareBuildVsInsert(new_points)) << "Failed on round " << round;
@@ -705,18 +707,18 @@ TEST(ConvexHullBuild, CoversAfterBuild) {
     auto points = tester.generateRandomPoints(100, 200);
     
     CHTree<K> built_tree;
-    built_tree.build(points);
+    built_tree.Build(points);
     
     CHTree<K> inserted_tree;
     for (const auto& p : points) {
-        inserted_tree.insert(p);
+        inserted_tree.Insert(p);
     }
     
     // Generate test points and compare covers() results
     std::uniform_int_distribution<int> dist(-200, 200);
     for (int i = 0; i < 100; i++) {
         Point_2 query(dist(tester.rng), dist(tester.rng));
-        EXPECT_EQ(built_tree.covers(query), inserted_tree.covers(query)) 
+        EXPECT_EQ(built_tree.Covers(query), inserted_tree.Covers(query)) 
             << "covers() mismatch for point (" << query.x() << ", " << query.y() << ")";
     }
 }
@@ -748,8 +750,8 @@ bool verifyHullCorrectness(CHTree<K>& tree, const std::vector<Point_2>& points) 
     auto expected_lower = hull_helpers::adjustLowerHullForCHTree(
         monotone_chain::lowerHull(hull_helpers::toIntPairs(points)));
     
-    auto ch_upper = hull_helpers::toIntPairs(tree.upperHullPoints());
-    auto ch_lower = hull_helpers::toIntPairs(tree.lowerHullPoints());
+    auto ch_upper = hull_helpers::toIntPairs(tree.UpperHullPoints());
+    auto ch_lower = hull_helpers::toIntPairs(tree.LowerHullPoints());
     
     // Check that all essential points are contained in the CHTree hull
     return hull_helpers::hullContainsAll(expected_upper, ch_upper) &&
@@ -762,7 +764,7 @@ TEST(ConvexHullBuild, InsertionsAfterBuild_Verified) {
     auto initial_points = tester.generateRandomPoints(50, 200);
     
     CHTree<K> tree;
-    tree.build(initial_points);
+    tree.Build(initial_points);
     
     // Verify initial state
     ASSERT_TRUE(verifyHullCorrectness(tree, initial_points)) 
@@ -772,7 +774,7 @@ TEST(ConvexHullBuild, InsertionsAfterBuild_Verified) {
     std::uniform_int_distribution<int> dist(-250, 250);
     for (int i = 0; i < 50; i++) {
         Point_2 p(dist(tester.rng), dist(tester.rng));
-        tree.insert(p);
+        tree.Insert(p);
         initial_points.push_back(p);
         
         EXPECT_TRUE(verifyHullCorrectness(tree, initial_points)) 
@@ -787,7 +789,7 @@ TEST(ConvexHullBuild, RemovalsAfterBuild_Verified) {
     auto points = tester.generateRandomPoints(100, 300);
     
     CHTree<K> tree;
-    tree.build(points);
+    tree.Build(points);
     
     // Verify initial state
     ASSERT_TRUE(verifyHullCorrectness(tree, points)) 
@@ -797,7 +799,7 @@ TEST(ConvexHullBuild, RemovalsAfterBuild_Verified) {
     for (int i = 0; i < 50 && points.size() > 3; i++) {
         size_t idx = tester.rng() % points.size();
         Point_2 p = points[idx];
-        tree.remove(p);
+        tree.Remove(p);
         points.erase(points.begin() + idx);
         
         EXPECT_TRUE(verifyHullCorrectness(tree, points)) 
@@ -812,7 +814,7 @@ TEST(ConvexHullBuild, MixedOperationsAfterBuild_Verified) {
     auto points = tester.generateRandomPoints(75, 250);
     
     CHTree<K> tree;
-    tree.build(points);
+    tree.Build(points);
     
     ASSERT_TRUE(verifyHullCorrectness(tree, points)) 
         << "Hull incorrect after initial build";
@@ -825,12 +827,12 @@ TEST(ConvexHullBuild, MixedOperationsAfterBuild_Verified) {
         
         if (op < 2 || points.size() <= 4) {  // Insert
             Point_2 p(coord_dist(tester.rng), coord_dist(tester.rng));
-            tree.insert(p);
+            tree.Insert(p);
             points.push_back(p);
         } else {  // Remove
             size_t idx = tester.rng() % points.size();
             Point_2 p = points[idx];
-            tree.remove(p);
+            tree.Remove(p);
             points.erase(points.begin() + idx);
         }
         
@@ -845,7 +847,7 @@ TEST(ConvexHullBuild, ManyOperationsAfterBuild_Stress) {
     auto points = tester.generateRandomPoints(200, 500);
     
     CHTree<K> tree;
-    tree.build(points);
+    tree.Build(points);
     
     std::uniform_int_distribution<int> coord_dist(-600, 600);
     std::uniform_int_distribution<int> op_dist(0, 1);
@@ -854,11 +856,11 @@ TEST(ConvexHullBuild, ManyOperationsAfterBuild_Stress) {
     for (int i = 0; i < 500; i++) {
         if (op_dist(tester.rng) == 0 || points.size() <= 5) {
             Point_2 p(coord_dist(tester.rng), coord_dist(tester.rng));
-            tree.insert(p);
+            tree.Insert(p);
             points.push_back(p);
         } else {
             size_t idx = tester.rng() % points.size();
-            tree.remove(points[idx]);
+            tree.Remove(points[idx]);
             points.erase(points.begin() + idx);
         }
     }
@@ -874,11 +876,11 @@ TEST(ConvexHullBuild, CoversAfterMixedOperations) {
     auto points = tester.generateRandomPoints(100, 300);
     
     CHTree<K> built_tree;
-    built_tree.build(points);
+    built_tree.Build(points);
     
     CHTree<K> inserted_tree;
     for (const auto& p : points) {
-        inserted_tree.insert(p);
+        inserted_tree.Insert(p);
     }
     
     std::uniform_int_distribution<int> coord_dist(-350, 350);
@@ -886,22 +888,22 @@ TEST(ConvexHullBuild, CoversAfterMixedOperations) {
     // Do some operations on both trees
     for (int i = 0; i < 30; i++) {
         Point_2 p(coord_dist(tester.rng), coord_dist(tester.rng));
-        built_tree.insert(p);
-        inserted_tree.insert(p);
+        built_tree.Insert(p);
+        inserted_tree.Insert(p);
         points.push_back(p);
     }
     
     for (int i = 0; i < 20 && points.size() > 5; i++) {
         size_t idx = tester.rng() % points.size();
-        built_tree.remove(points[idx]);
-        inserted_tree.remove(points[idx]);
+        built_tree.Remove(points[idx]);
+        inserted_tree.Remove(points[idx]);
         points.erase(points.begin() + idx);
     }
     
     // Verify covers() matches between both trees
     for (int i = 0; i < 200; i++) {
         Point_2 query(coord_dist(tester.rng), coord_dist(tester.rng));
-        EXPECT_EQ(built_tree.covers(query), inserted_tree.covers(query)) 
+        EXPECT_EQ(built_tree.Covers(query), inserted_tree.Covers(query)) 
             << "covers() mismatch at (" << query.x() << ", " << query.y() << ")";
     }
 }
@@ -912,11 +914,11 @@ TEST(ConvexHullBuild, HullPointsMatch_AfterOperations) {
     auto points = tester.generateRandomPoints(80, 250);
     
     CHTree<K> built_tree;
-    built_tree.build(points);
+    built_tree.Build(points);
     
     CHTree<K> inserted_tree;
     for (const auto& p : points) {
-        inserted_tree.insert(p);
+        inserted_tree.Insert(p);
     }
     
     std::uniform_int_distribution<int> coord_dist(-300, 300);
@@ -926,24 +928,24 @@ TEST(ConvexHullBuild, HullPointsMatch_AfterOperations) {
         // Insert some points
         for (int i = 0; i < 10; i++) {
             Point_2 p(coord_dist(tester.rng), coord_dist(tester.rng));
-            built_tree.insert(p);
-            inserted_tree.insert(p);
+            built_tree.Insert(p);
+            inserted_tree.Insert(p);
             points.push_back(p);
         }
         
         // Remove some points
         for (int i = 0; i < 5 && points.size() > 5; i++) {
             size_t idx = tester.rng() % points.size();
-            built_tree.remove(points[idx]);
-            inserted_tree.remove(points[idx]);
+            built_tree.Remove(points[idx]);
+            inserted_tree.Remove(points[idx]);
             points.erase(points.begin() + idx);
         }
         
         // Verify hull points match
-        auto built_upper = built_tree.upperHullPoints();
-        auto insert_upper = inserted_tree.upperHullPoints();
-        auto built_lower = built_tree.lowerHullPoints();
-        auto insert_lower = inserted_tree.lowerHullPoints();
+        auto built_upper = built_tree.UpperHullPoints();
+        auto insert_upper = inserted_tree.UpperHullPoints();
+        auto built_lower = built_tree.LowerHullPoints();
+        auto insert_lower = inserted_tree.LowerHullPoints();
         
         EXPECT_EQ(built_upper.size(), insert_upper.size()) 
             << "Upper hull size mismatch at round " << round;
@@ -970,7 +972,7 @@ TEST(ConvexHullBuild, BuildOperationsRebuild) {
         auto points = tester.generateRandomPoints(50 + cycle * 25, 300);
         
         CHTree<K> tree;
-        tree.build(points);
+        tree.Build(points);
         
         std::uniform_int_distribution<int> coord_dist(-350, 350);
         
@@ -978,11 +980,11 @@ TEST(ConvexHullBuild, BuildOperationsRebuild) {
         for (int i = 0; i < 30; i++) {
             if (tester.rng() % 2 == 0 || points.size() <= 5) {
                 Point_2 p(coord_dist(tester.rng), coord_dist(tester.rng));
-                tree.insert(p);
+                tree.Insert(p);
                 points.push_back(p);
             } else {
                 size_t idx = tester.rng() % points.size();
-                tree.remove(points[idx]);
+                tree.Remove(points[idx]);
                 points.erase(points.begin() + idx);
             }
         }
@@ -993,7 +995,7 @@ TEST(ConvexHullBuild, BuildOperationsRebuild) {
         
         // Rebuild with new points
         auto new_points = tester.generateRandomPoints(80 + cycle * 20, 400);
-        tree.build(new_points);
+        tree.Build(new_points);
         
         EXPECT_TRUE(verifyHullCorrectness(tree, new_points)) 
             << "Hull incorrect after rebuild in cycle " << cycle;

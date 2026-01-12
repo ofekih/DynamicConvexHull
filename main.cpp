@@ -13,6 +13,8 @@
 #include "include/CHTree.h"
 #include "inexact.h"
 
+using namespace dch;
+
 using K = Inexact_kernel<double>;
 using Point_2 = K::Point_2;
 
@@ -105,13 +107,13 @@ void runtimeTest(int size, int mode, int seed) {
     CHTree<K> CH;
     std::vector<Point_2> out;
     auto start = std::chrono::steady_clock::now();
-    for(const auto& p : data) CH.insert(Point_2(p.first,p.second));
+    for(const auto& p : data) CH.Insert(Point_2(p.first,p.second));
     auto end = std::chrono::steady_clock::now();
     auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end-start);
     std::cout << "CHTree insert time: " << elapsed.count() << "ms\n";
 
     start = std::chrono::steady_clock::now();
-    for(const auto& p : data) CH.remove(Point_2(p.first,p.second));
+    for(const auto& p : data) CH.Remove(Point_2(p.first,p.second));
     end = std::chrono::steady_clock::now();
     elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end-start);
     std::cout << "CHTree remove time: " << elapsed.count() << "ms\n";
@@ -124,7 +126,7 @@ bool verify(CHTree<K>& CH, std::vector<std::pair<double,double>>& data, int size
     std::vector<std::pair<double,double>> temp(data.begin(), data.begin() + size);
     
     auto refUpper = reference::upperHull(temp);
-    auto res = CH.upperHullPoints();
+    auto res = CH.UpperHullPoints();
     
     // Skip leftmost point in CHTree upper hull for comparison
     if (res.size() > 1 && refUpper.size() > 1) {
@@ -137,7 +139,7 @@ bool verify(CHTree<K>& CH, std::vector<std::pair<double,double>>& data, int size
     }
     
     auto refLower = reference::lowerHull(temp);
-    res = CH.lowerHullPoints();
+    res = CH.LowerHullPoints();
     
     // Skip rightmost point in CHTree lower hull for comparison
     if (res.size() > 1 && refLower.size() > 1) {
@@ -162,7 +164,7 @@ bool verificationTest(int verify_step, bool shuffle) {
     for(int i = 0; i <= verify_step; i++){
         x = g()%1000;
         y = g()%1000;
-        CH.insert(Point_2(x,y));
+        CH.Insert(Point_2(x,y));
         data.emplace_back(x,y);
     }
     if (!verify(CH, data, data.size())) {
@@ -173,7 +175,7 @@ bool verificationTest(int verify_step, bool shuffle) {
         std::shuffle(data.begin(), data.end(), g);
     }
     for(int i = data.size()-1; i > 0 && i > (int)data.size()-verify_step-1; i--){
-        CH.remove(Point_2(data[i].first, data[i].second));
+        CH.Remove(Point_2(data[i].first, data[i].second));
         if (!verify(CH, data, i)) {
             std::cout << "Verification failed after remove " << i << "\n";
             return false;

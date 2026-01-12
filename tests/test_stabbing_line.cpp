@@ -9,6 +9,8 @@
 #include "StabbingLineStructure.h"
 #include "inexact.h"
 
+using namespace dch;
+
 using K = Inexact_kernel<double>;
 using Point_2 = K::Point_2;
 typedef StabbingLineStructure<K> SLS;
@@ -74,7 +76,7 @@ struct HalfPlaneIntersection {
         : points(pts), epsilon(eps) {}
     
     // Get b_min for a given slope m
-    double getBMin(double m) const {
+    double GetBMin(double m) const {
         double bMin = -std::numeric_limits<double>::infinity();
         for (const auto& p : points) {
             double constraint = (p.y() - epsilon) - m * p.x();
@@ -84,7 +86,7 @@ struct HalfPlaneIntersection {
     }
     
     // Get b_max for a given slope m
-    double getBMax(double m) const {
+    double GetBMax(double m) const {
         double bMax = std::numeric_limits<double>::infinity();
         for (const auto& p : points) {
             double constraint = (p.y() + epsilon) - m * p.x();
@@ -94,13 +96,13 @@ struct HalfPlaneIntersection {
     }
     
     // Check if slope m is feasible
-    bool isFeasible(double m) const {
-        return getBMin(m) <= getBMax(m) + 1e-9;
+    bool IsFeasible(double m) const {
+        return GetBMin(m) <= GetBMax(m) + 1e-9;
     }
     
     // Find a valid line using ternary search on slope
     // Returns {hasLine, slope, intercept}
-    std::tuple<bool, double, double> findLine() const {
+    std::tuple<bool, double, double> FindLine() const {
         if (points.empty()) {
             return {true, 0, 0};
         }
@@ -139,9 +141,9 @@ struct HalfPlaneIntersection {
         
         // Try each candidate slope
         for (double m : slopesToTry) {
-            if (isFeasible(m)) {
-                double bMin = getBMin(m);
-                double bMax = getBMax(m);
+            if (IsFeasible(m)) {
+                double bMin = GetBMin(m);
+                double bMax = GetBMax(m);
                 double b = (bMin + bMax) / 2.0;
                 return {true, m, b};
             }
@@ -149,9 +151,9 @@ struct HalfPlaneIntersection {
         
         // If no candidate worked, do a denser grid search
         for (double m = -1000; m <= 1000; m += 0.1) {
-            if (isFeasible(m)) {
-                double bMin = getBMin(m);
-                double bMax = getBMax(m);
+            if (IsFeasible(m)) {
+                double bMin = GetBMin(m);
+                double bMax = GetBMax(m);
                 double b = (bMin + bMax) / 2.0;
                 return {true, m, b};
             }
@@ -160,8 +162,8 @@ struct HalfPlaneIntersection {
         return {false, 0, 0};
     }
     
-    bool hasStabbingLine() const {
-        return std::get<0>(findLine());
+    bool HasStabbingLine() const {
+        return std::get<0>(FindLine());
     }
 };
 
@@ -179,7 +181,7 @@ bool bruteForceFindStabbingLine(const std::vector<Point_2>& points, double epsil
     
     // Use the more sophisticated half-plane intersection method
     HalfPlaneIntersection hpi(points, epsilon);
-    return hpi.hasStabbingLine();
+    return hpi.HasStabbingLine();
 }
 
 // ============================================================================
@@ -213,7 +215,7 @@ VerificationResult verifyStabbingLineQuery(const std::vector<Point_2>& points,
             return a.y() < b.y();
         });
     if (!sortedPoints.empty()) {
-        sls.build(sortedPoints);
+        sls.Build(sortedPoints);
     }
     
     if (debug) {
@@ -223,20 +225,20 @@ VerificationResult verifyStabbingLineQuery(const std::vector<Point_2>& points,
         std::cout << "DEBUG: Sorted points (" << sortedPoints.size() << "): ";
         for (const auto& p : sortedPoints) std::cout << "(" << p.x() << "," << p.y() << ") ";
         std::cout << "\n";
-        std::cout << "DEBUG: SLS size: " << sls.size() << "\n";
+        std::cout << "DEBUG: SLS size: " << sls.Size() << "\n";
         std::cout << "DEBUG: epsilon = " << epsilon << "\n";
     }
     
     // Get algorithm result
-    result.algorithmResult = sls.hasStabbingLine();
+    result.algorithmResult = sls.HasStabbingLine();
     
     // Get reference result
     HalfPlaneIntersection hpi(points, epsilon);
-    result.referenceResult = hpi.hasStabbingLine();
+    result.referenceResult = hpi.HasStabbingLine();
     
     if (debug && result.algorithmResult != result.referenceResult) {
         // Try to find what slope the reference finds
-        auto [ok, m, b] = hpi.findLine();
+        auto [ok, m, b] = hpi.FindLine();
         if (ok) {
             std::cout << "DEBUG: Reference found line: y = " << m << "x + " << b << "\n";
             // Check feasibility with sorted points
@@ -253,7 +255,7 @@ VerificationResult verifyStabbingLineQuery(const std::vector<Point_2>& points,
     // If algorithm says there's a line, verify it
     result.algorithmLineValid = true;
     if (result.algorithmResult) {
-        auto line = sls.findStabbingLine();
+        auto line = sls.FindStabbingLine();
         if (line.has_value()) {
             result.algorithmLineValid = verifyLineCoversAllPoints(points, *line, epsilon);
             if (!result.algorithmLineValid) {
@@ -262,7 +264,7 @@ VerificationResult verifyStabbingLineQuery(const std::vector<Point_2>& points,
                     << ") doesn't cover all points!";
                 // Find the first uncovered point
                 for (const auto& p : points) {
-                    double lineY = line->at(p.x());
+                    double lineY = line->At(p.x());
                     double error = std::abs(p.y() - lineY);
                     if (error > epsilon + 1e-9) {
                         oss << " Point (" << p.x() << "," << p.y() << ") has error " << error;
@@ -294,55 +296,55 @@ VerificationResult verifyStabbingLineQuery(const std::vector<Point_2>& points,
 
 TEST(StabbingLine, EmptySet) {
     SLS sls(1.0);
-    EXPECT_TRUE(sls.hasStabbingLine());
-    auto line = sls.findStabbingLine();
+    EXPECT_TRUE(sls.HasStabbingLine());
+    auto line = sls.FindStabbingLine();
     ASSERT_TRUE(line.has_value());
 }
 
 TEST(StabbingLine, SinglePoint) {
     SLS sls(1.0);
-    sls.insert(Point_2(5, 10));
-    EXPECT_TRUE(sls.hasStabbingLine());
+    sls.Insert(Point_2(5, 10));
+    EXPECT_TRUE(sls.HasStabbingLine());
     
-    auto line = sls.findStabbingLine();
+    auto line = sls.FindStabbingLine();
     ASSERT_TRUE(line.has_value());
     
     // The line should pass within epsilon of the point
-    double lineY = line->at(5);
+    double lineY = line->At(5);
     EXPECT_LE(std::abs(lineY - 10), 1.0 + 1e-9);
 }
 
 TEST(StabbingLine, TwoPoints_Horizontal) {
     SLS sls(1.0);
-    sls.insert(Point_2(0, 10));
-    sls.insert(Point_2(10, 10));
-    EXPECT_TRUE(sls.hasStabbingLine());
+    sls.Insert(Point_2(0, 10));
+    sls.Insert(Point_2(10, 10));
+    EXPECT_TRUE(sls.HasStabbingLine());
     
-    auto line = sls.findStabbingLine();
+    auto line = sls.FindStabbingLine();
     ASSERT_TRUE(line.has_value());
-    EXPECT_TRUE(line->coversPoint(Point_2(0, 10), 1.0));
-    EXPECT_TRUE(line->coversPoint(Point_2(10, 10), 1.0));
+    EXPECT_TRUE(line->CoversPoint(Point_2(0, 10), 1.0));
+    EXPECT_TRUE(line->CoversPoint(Point_2(10, 10), 1.0));
 }
 
 TEST(StabbingLine, TwoPoints_Diagonal) {
     SLS sls(1.0);
-    sls.insert(Point_2(0, 0));
-    sls.insert(Point_2(10, 10));
-    EXPECT_TRUE(sls.hasStabbingLine());
+    sls.Insert(Point_2(0, 0));
+    sls.Insert(Point_2(10, 10));
+    EXPECT_TRUE(sls.HasStabbingLine());
     
-    auto line = sls.findStabbingLine();
+    auto line = sls.FindStabbingLine();
     ASSERT_TRUE(line.has_value());
-    EXPECT_TRUE(line->coversPoint(Point_2(0, 0), 1.0));
-    EXPECT_TRUE(line->coversPoint(Point_2(10, 10), 1.0));
+    EXPECT_TRUE(line->CoversPoint(Point_2(0, 0), 1.0));
+    EXPECT_TRUE(line->CoversPoint(Point_2(10, 10), 1.0));
 }
 
 TEST(StabbingLine, TwoPoints_TooFarApart) {
     // Two points at the SAME x-coordinate, far apart vertically
     // No non-vertical line can pass within epsilon of both
     SLS sls(0.1);
-    sls.insert(Point_2(5, 0));
-    sls.insert(Point_2(5, 10));  // Same x, far apart in y
-    EXPECT_FALSE(sls.hasStabbingLine());
+    sls.Insert(Point_2(5, 0));
+    sls.Insert(Point_2(5, 10));  // Same x, far apart in y
+    EXPECT_FALSE(sls.HasStabbingLine());
 }
 
 // ============================================================================
@@ -352,28 +354,28 @@ TEST(StabbingLine, TwoPoints_TooFarApart) {
 TEST(StabbingLine, CollinearHorizontal) {
     SLS sls(1.0);
     for (int x = 0; x < 10; ++x) {
-        sls.insert(Point_2(x, 5));
+        sls.Insert(Point_2(x, 5));
     }
-    EXPECT_TRUE(sls.hasStabbingLine());
+    EXPECT_TRUE(sls.HasStabbingLine());
     
-    auto line = sls.findStabbingLine();
+    auto line = sls.FindStabbingLine();
     ASSERT_TRUE(line.has_value());
     // Should be approximately y = 5
-    EXPECT_NEAR(line->at(5), 5.0, 1.0);
+    EXPECT_NEAR(line->At(5), 5.0, 1.0);
 }
 
 TEST(StabbingLine, CollinearDiagonal) {
     SLS sls(1.0);
     for (int i = 0; i < 10; ++i) {
-        sls.insert(Point_2(i, i * 2));  // y = 2x
+        sls.Insert(Point_2(i, i * 2));  // y = 2x
     }
-    EXPECT_TRUE(sls.hasStabbingLine());
+    EXPECT_TRUE(sls.HasStabbingLine());
     
-    auto line = sls.findStabbingLine();
+    auto line = sls.FindStabbingLine();
     ASSERT_TRUE(line.has_value());
     // All points should be covered
     for (int i = 0; i < 10; ++i) {
-        EXPECT_TRUE(line->coversPoint(Point_2(i, i * 2), 1.0));
+        EXPECT_TRUE(line->CoversPoint(Point_2(i, i * 2), 1.0));
     }
 }
 
@@ -384,24 +386,24 @@ TEST(StabbingLine, CollinearDiagonal) {
 TEST(StabbingLine, PointsNearLine) {
     SLS sls(1.0);
     // Points close to y = x
-    sls.insert(Point_2(0, 0.5));
-    sls.insert(Point_2(5, 5.3));
-    sls.insert(Point_2(10, 9.8));
-    EXPECT_TRUE(sls.hasStabbingLine());
+    sls.Insert(Point_2(0, 0.5));
+    sls.Insert(Point_2(5, 5.3));
+    sls.Insert(Point_2(10, 9.8));
+    EXPECT_TRUE(sls.HasStabbingLine());
     
-    auto line = sls.findStabbingLine();
+    auto line = sls.FindStabbingLine();
     ASSERT_TRUE(line.has_value());
-    EXPECT_TRUE(line->coversPoint(Point_2(0, 0.5), 1.0));
-    EXPECT_TRUE(line->coversPoint(Point_2(5, 5.3), 1.0));
-    EXPECT_TRUE(line->coversPoint(Point_2(10, 9.8), 1.0));
+    EXPECT_TRUE(line->CoversPoint(Point_2(0, 0.5), 1.0));
+    EXPECT_TRUE(line->CoversPoint(Point_2(5, 5.3), 1.0));
+    EXPECT_TRUE(line->CoversPoint(Point_2(10, 9.8), 1.0));
 }
 
 TEST(StabbingLine, LargeEpsilon) {
     SLS sls(100.0);
-    sls.insert(Point_2(0, 0));
-    sls.insert(Point_2(10, 50));
-    sls.insert(Point_2(20, -30));
-    EXPECT_TRUE(sls.hasStabbingLine());
+    sls.Insert(Point_2(0, 0));
+    sls.Insert(Point_2(10, 50));
+    sls.Insert(Point_2(20, -30));
+    EXPECT_TRUE(sls.HasStabbingLine());
 }
 
 // ============================================================================
@@ -411,71 +413,71 @@ TEST(StabbingLine, LargeEpsilon) {
 TEST(StabbingLine, OutlierPoint) {
     SLS sls(1.0);
     // Three collinear points and one outlier
-    sls.insert(Point_2(0, 0));
-    sls.insert(Point_2(5, 5));
-    sls.insert(Point_2(10, 10));
-    sls.insert(Point_2(5, 20));  // Outlier - far from y=x
-    EXPECT_FALSE(sls.hasStabbingLine());
+    sls.Insert(Point_2(0, 0));
+    sls.Insert(Point_2(5, 5));
+    sls.Insert(Point_2(10, 10));
+    sls.Insert(Point_2(5, 20));  // Outlier - far from y=x
+    EXPECT_FALSE(sls.HasStabbingLine());
 }
 
 TEST(StabbingLine, ZigZagPattern) {
     SLS sls(0.5);
     // Points that zig-zag too much for epsilon=0.5
-    sls.insert(Point_2(0, 0));
-    sls.insert(Point_2(1, 5));
-    sls.insert(Point_2(2, 0));
-    sls.insert(Point_2(3, 5));
+    sls.Insert(Point_2(0, 0));
+    sls.Insert(Point_2(1, 5));
+    sls.Insert(Point_2(2, 0));
+    sls.Insert(Point_2(3, 5));
     // No line can fit through this with epsilon=0.5
-    EXPECT_FALSE(sls.hasStabbingLine());
+    EXPECT_FALSE(sls.HasStabbingLine());
 }
 
 TEST(StabbingLine, TrianglePattern) {
     SLS sls(0.5);
     // Triangle pattern - no line fits with small epsilon
-    sls.insert(Point_2(0, 0));
-    sls.insert(Point_2(5, 10));
-    sls.insert(Point_2(10, 0));
-    EXPECT_FALSE(sls.hasStabbingLine());
+    sls.Insert(Point_2(0, 0));
+    sls.Insert(Point_2(5, 10));
+    sls.Insert(Point_2(10, 0));
+    EXPECT_FALSE(sls.HasStabbingLine());
 }
 
 TEST(StabbingLine, WideSpread) {
     SLS sls(1.0);
     // Points spread across a wide y-range at same x
-    sls.insert(Point_2(0, -100));
-    sls.insert(Point_2(0, 0));
-    sls.insert(Point_2(0, 100));
+    sls.Insert(Point_2(0, -100));
+    sls.Insert(Point_2(0, 0));
+    sls.Insert(Point_2(0, 100));
     // Gap = 200, epsilon = 1, so need gap <= 2 = impossible
-    EXPECT_FALSE(sls.hasStabbingLine());
+    EXPECT_FALSE(sls.HasStabbingLine());
 }
 
 TEST(StabbingLine, ParabolicSpread) {
     SLS sls(0.5);
     // Points that follow a parabola - no line fits
-    sls.insert(Point_2(-2, 4));
-    sls.insert(Point_2(-1, 1));
-    sls.insert(Point_2(0, 0));
-    sls.insert(Point_2(1, 1));
-    sls.insert(Point_2(2, 4));
-    EXPECT_FALSE(sls.hasStabbingLine());
+    sls.Insert(Point_2(-2, 4));
+    sls.Insert(Point_2(-1, 1));
+    sls.Insert(Point_2(0, 0));
+    sls.Insert(Point_2(1, 1));
+    sls.Insert(Point_2(2, 4));
+    EXPECT_FALSE(sls.HasStabbingLine());
 }
 
 TEST(StabbingLine, BoxPattern) {
     SLS sls(0.1);
     // Four corners of a box - no line fits with small epsilon
-    sls.insert(Point_2(0, 0));
-    sls.insert(Point_2(0, 10));
-    sls.insert(Point_2(10, 0));
-    sls.insert(Point_2(10, 10));
-    EXPECT_FALSE(sls.hasStabbingLine());
+    sls.Insert(Point_2(0, 0));
+    sls.Insert(Point_2(0, 10));
+    sls.Insert(Point_2(10, 0));
+    sls.Insert(Point_2(10, 10));
+    EXPECT_FALSE(sls.HasStabbingLine());
 }
 
 TEST(StabbingLine, SteepVsShallow) {
     SLS sls(0.1);
     // One set of points requires steep line, another requires shallow
-    sls.insert(Point_2(0, 0));
-    sls.insert(Point_2(1, 10));  // Suggests slope ~10
-    sls.insert(Point_2(10, 1));  // Suggests slope ~0.1
-    EXPECT_FALSE(sls.hasStabbingLine());
+    sls.Insert(Point_2(0, 0));
+    sls.Insert(Point_2(1, 10));  // Suggests slope ~10
+    sls.Insert(Point_2(10, 1));  // Suggests slope ~0.1
+    EXPECT_FALSE(sls.HasStabbingLine());
 }
 
 // ============================================================================
@@ -484,25 +486,25 @@ TEST(StabbingLine, SteepVsShallow) {
 
 TEST(StabbingLine, InsertMakesInvalid) {
     SLS sls(1.0);
-    sls.insert(Point_2(0, 0));
-    sls.insert(Point_2(10, 10));
-    EXPECT_TRUE(sls.hasStabbingLine());
+    sls.Insert(Point_2(0, 0));
+    sls.Insert(Point_2(10, 10));
+    EXPECT_TRUE(sls.HasStabbingLine());
     
     // Add an outlier
-    sls.insert(Point_2(5, 100));
-    EXPECT_FALSE(sls.hasStabbingLine());
+    sls.Insert(Point_2(5, 100));
+    EXPECT_FALSE(sls.HasStabbingLine());
 }
 
 TEST(StabbingLine, RemoveMakesValid) {
     SLS sls(1.0);
-    sls.insert(Point_2(0, 0));
-    sls.insert(Point_2(10, 10));
-    sls.insert(Point_2(5, 100));  // Outlier
-    EXPECT_FALSE(sls.hasStabbingLine());
+    sls.Insert(Point_2(0, 0));
+    sls.Insert(Point_2(10, 10));
+    sls.Insert(Point_2(5, 100));  // Outlier
+    EXPECT_FALSE(sls.HasStabbingLine());
     
     // Remove the outlier
-    sls.remove(Point_2(5, 100));
-    EXPECT_TRUE(sls.hasStabbingLine());
+    sls.Remove(Point_2(5, 100));
+    EXPECT_TRUE(sls.HasStabbingLine());
 }
 
 TEST(StabbingLine, BuildFromSorted) {
@@ -514,9 +516,9 @@ TEST(StabbingLine, BuildFromSorted) {
         Point_2(8, 8),
         Point_2(10, 10.2)
     };
-    sls.build(points);
-    EXPECT_TRUE(sls.hasStabbingLine());
-    EXPECT_EQ(sls.size(), 5u);
+    sls.Build(points);
+    EXPECT_TRUE(sls.HasStabbingLine());
+    EXPECT_EQ(sls.Size(), 5u);
 }
 
 // ============================================================================
@@ -526,28 +528,28 @@ TEST(StabbingLine, BuildFromSorted) {
 TEST(StabbingLine, SplitBasic) {
     SLS sls(1.0);
     for (int x = 0; x < 10; ++x) {
-        sls.insert(Point_2(x, x));
+        sls.Insert(Point_2(x, x));
     }
-    EXPECT_TRUE(sls.hasStabbingLine());
+    EXPECT_TRUE(sls.HasStabbingLine());
     
-    auto right = sls.split(5);
+    auto right = sls.Split(5);
     
     // Both parts should have stabbing lines
-    EXPECT_TRUE(sls.hasStabbingLine());
-    EXPECT_TRUE(right.hasStabbingLine());
+    EXPECT_TRUE(sls.HasStabbingLine());
+    EXPECT_TRUE(right.HasStabbingLine());
 }
 
 TEST(StabbingLine, JoinBasic) {
     SLS left(1.0);
     SLS right(1.0);
     
-    for (int x = 0; x < 5; ++x) left.insert(Point_2(x, x));
-    for (int x = 5; x < 10; ++x) right.insert(Point_2(x, x));
+    for (int x = 0; x < 5; ++x) left.Insert(Point_2(x, x));
+    for (int x = 5; x < 10; ++x) right.Insert(Point_2(x, x));
     
-    left.join(right);
+    left.Join(right);
     
-    EXPECT_TRUE(left.hasStabbingLine());
-    EXPECT_EQ(right.size(), 0u);
+    EXPECT_TRUE(left.HasStabbingLine());
+    EXPECT_EQ(right.Size(), 0u);
 }
 
 TEST(StabbingLine, JoinMakesInvalid) {
@@ -556,14 +558,14 @@ TEST(StabbingLine, JoinMakesInvalid) {
     
     // Two sets that individually have stabbing lines
     // but together don't
-    for (int x = 0; x < 5; ++x) left.insert(Point_2(x, 0));
-    for (int x = 10; x < 15; ++x) right.insert(Point_2(x, 100));
+    for (int x = 0; x < 5; ++x) left.Insert(Point_2(x, 0));
+    for (int x = 10; x < 15; ++x) right.Insert(Point_2(x, 100));
     
-    EXPECT_TRUE(left.hasStabbingLine());
-    EXPECT_TRUE(right.hasStabbingLine());
+    EXPECT_TRUE(left.HasStabbingLine());
+    EXPECT_TRUE(right.HasStabbingLine());
     
-    left.join(right);
-    EXPECT_FALSE(left.hasStabbingLine());
+    left.Join(right);
+    EXPECT_FALSE(left.HasStabbingLine());
 }
 
 // ============================================================================
@@ -587,12 +589,12 @@ TEST(StabbingLine, RandomSmall_Valid) {
             double x = i * 2.0;
             double y = slope * x + intercept + noise(rng);
             points.emplace_back(x, y);
-            sls.insert(Point_2(x, y));
+            sls.Insert(Point_2(x, y));
         }
         
         // Should have a valid stabbing line
         bool expected = bruteForceFindStabbingLine(points, 1.0);
-        bool actual = sls.hasStabbingLine();
+        bool actual = sls.HasStabbingLine();
         
         EXPECT_EQ(expected, actual) 
             << "Trial " << trial << ": expected=" << expected << ", actual=" << actual;
@@ -612,12 +614,12 @@ TEST(StabbingLine, RandomSmall_Invalid) {
             double x = i * 5.0;
             double y = pos(rng);
             points.emplace_back(x, y);
-            sls.insert(Point_2(x, y));
+            sls.Insert(Point_2(x, y));
         }
         
         // Compare with brute force
         bool expected = bruteForceFindStabbingLine(points, 0.5);
-        bool actual = sls.hasStabbingLine();
+        bool actual = sls.HasStabbingLine();
         
         EXPECT_EQ(expected, actual) 
             << "Trial " << trial << ": expected=" << expected << ", actual=" << actual;
@@ -645,16 +647,16 @@ TEST(StabbingLine, RandomMedium) {
                 if (a.x() != b.x()) return a.x() < b.x();
                 return a.y() < b.y();
             });
-        sls.build(points);
+        sls.Build(points);
         
         // Should have a stabbing line
-        EXPECT_TRUE(sls.hasStabbingLine()) << "Trial " << trial;
+        EXPECT_TRUE(sls.HasStabbingLine()) << "Trial " << trial;
         
         // Verify the returned line
-        auto line = sls.findStabbingLine();
+        auto line = sls.FindStabbingLine();
         ASSERT_TRUE(line.has_value());
         for (const auto& p : points) {
-            EXPECT_TRUE(line->coversPoint(p, 0.5)) 
+            EXPECT_TRUE(line->CoversPoint(p, 0.5)) 
                 << "Line doesn't cover point (" << p.x() << "," << p.y() << ")";
         }
     }
@@ -684,16 +686,16 @@ TEST(StabbingLine, StressTest_Large) {
             if (a.x() != b.x()) return a.x() < b.x();
             return a.y() < b.y();
         });
-    sls.build(points);
+    sls.Build(points);
     
-    EXPECT_TRUE(sls.hasStabbingLine());
-    EXPECT_EQ(sls.size(), 1000u);
+    EXPECT_TRUE(sls.HasStabbingLine());
+    EXPECT_EQ(sls.Size(), 1000u);
     
     // Verify the returned line covers all points
-    auto line = sls.findStabbingLine();
+    auto line = sls.FindStabbingLine();
     ASSERT_TRUE(line.has_value());
     for (const auto& p : points) {
-        EXPECT_TRUE(line->coversPoint(p, 0.5)) 
+        EXPECT_TRUE(line->CoversPoint(p, 0.5)) 
             << "Line doesn't cover point (" << p.x() << "," << p.y() << ")";
     }
 }
@@ -711,7 +713,7 @@ TEST(StabbingLine, StressTest_DynamicOperations) {
         double x = i;
         double y = x + noise(rng);
         points.emplace_back(x, y);
-        sls.insert(points.back());
+        sls.Insert(points.back());
     }
     
     // Perform random insertions and removals
@@ -721,17 +723,17 @@ TEST(StabbingLine, StressTest_DynamicOperations) {
             double x = 50.0 + iter * 0.1;
             double y = x + noise(rng);
             points.emplace_back(x, y);
-            sls.insert(points.back());
+            sls.Insert(points.back());
         } else {
             // Remove
             size_t idx = rng() % points.size();
-            sls.remove(points[idx]);
+            sls.Remove(points[idx]);
             points.erase(points.begin() + idx);
         }
     }
     
     // Should still have a stabbing line (all points near y=x)
-    EXPECT_TRUE(sls.hasStabbingLine());
+    EXPECT_TRUE(sls.HasStabbingLine());
 }
 
 // ============================================================================
@@ -953,7 +955,7 @@ TEST(StabbingLineRigorous, DynamicOperationsVerified) {
         double x = i;
         double y = x + noise(rng);
         points.emplace_back(x, y);
-        sls.insert(points.back());
+        sls.Insert(points.back());
     }
     
     // Perform operations and verify after each
@@ -965,17 +967,17 @@ TEST(StabbingLineRigorous, DynamicOperationsVerified) {
             double x = points.empty() ? 0 : points.back().x() + 1;
             double y = x + noise(rng);
             points.emplace_back(x, y);
-            sls.insert(points.back());
+            sls.Insert(points.back());
         } else if (act == 1 && points.size() > 2) {
             // Remove
             size_t idx = rng() % points.size();
-            sls.remove(points[idx]);
+            sls.Remove(points[idx]);
             points.erase(points.begin() + idx);
         }
         // act == 2: just verify
         
         // Verify current state
-        bool algResult = sls.hasStabbingLine();
+        bool algResult = sls.HasStabbingLine();
         bool refResult = bruteForceFindStabbingLine(points, epsilon);
         
         EXPECT_EQ(algResult, refResult) 
@@ -983,7 +985,7 @@ TEST(StabbingLineRigorous, DynamicOperationsVerified) {
         
         // If there's a line, verify it covers all points
         if (algResult) {
-            auto line = sls.findStabbingLine();
+            auto line = sls.FindStabbingLine();
             ASSERT_TRUE(line.has_value());
             EXPECT_TRUE(verifyLineCoversAllPoints(points, *line, epsilon))
                 << "Iter " << iter << ": Line doesn't cover all points";
@@ -997,8 +999,8 @@ TEST(StabbingLineRigorous, ReferenceImplementationIsCorrect) {
     {
         std::vector<Point_2> pts = {Point_2(0,0), Point_2(5,5), Point_2(10,10)};
         HalfPlaneIntersection hpi(pts, 1.0);
-        EXPECT_TRUE(hpi.hasStabbingLine());
-        auto [ok, m, b] = hpi.findLine();
+        EXPECT_TRUE(hpi.HasStabbingLine());
+        auto [ok, m, b] = hpi.FindLine();
         EXPECT_TRUE(ok);
         EXPECT_TRUE(verifyLineCoversAllPoints(pts, m, b, 1.0));
     }
@@ -1007,21 +1009,21 @@ TEST(StabbingLineRigorous, ReferenceImplementationIsCorrect) {
     {
         std::vector<Point_2> pts = {Point_2(0,0), Point_2(1,10), Point_2(2,0), Point_2(3,10)};
         HalfPlaneIntersection hpi(pts, 1.0);
-        EXPECT_FALSE(hpi.hasStabbingLine());
+        EXPECT_FALSE(hpi.HasStabbingLine());
     }
     
     // Known case: two points same x, far apart
     {
         std::vector<Point_2> pts = {Point_2(5,0), Point_2(5,10)};
         HalfPlaneIntersection hpi(pts, 1.0);
-        EXPECT_FALSE(hpi.hasStabbingLine());
+        EXPECT_FALSE(hpi.HasStabbingLine());
     }
     
     // Known case: two points same x, close together
     {
         std::vector<Point_2> pts = {Point_2(5,0), Point_2(5,1)};
         HalfPlaneIntersection hpi(pts, 1.0);
-        EXPECT_TRUE(hpi.hasStabbingLine());
+        EXPECT_TRUE(hpi.HasStabbingLine());
     }
 }
 
@@ -1044,7 +1046,7 @@ struct TestInstance {
     
     void addPoint(const Point_2& p) {
         points.push_back(p);
-        sls.insert(p);
+        sls.Insert(p);
         minX = std::min(minX, p.x());
         maxX = std::max(maxX, p.x());
     }
@@ -1052,7 +1054,7 @@ struct TestInstance {
     void removePoint(size_t idx) {
         if (idx >= points.size()) return;
         Point_2 p = points[idx];
-        sls.remove(p);
+        sls.Remove(p);
         points.erase(points.begin() + idx);
         
         // Recompute bounds
@@ -1113,7 +1115,7 @@ TEST(StabbingLineRigorous, RandomizedSplitJoinStressTest) {
                 double splitX = (instance.minX + instance.maxX) / 2.0;
                 
                 // Perform split
-                auto rightSLS = instance.sls.split(splitX);
+                auto rightSLS = instance.sls.Split(splitX);
                 
                 // Create new instance for right part
                 auto rightInstance = std::make_unique<TestInstance>(nextId++, epsilon);
@@ -1161,11 +1163,11 @@ TEST(StabbingLineRigorous, RandomizedSplitJoinStressTest) {
                 bool instanceIsLeft = instance.maxX < other.minX;
                 
                 if (instanceIsLeft) {
-                    instance.sls.join(other.sls);
+                    instance.sls.Join(other.sls);
                     instance.points.insert(instance.points.end(), other.points.begin(), other.points.end());
                     instance.maxX = std::max(instance.maxX, other.maxX);
                 } else {
-                    other.sls.join(instance.sls);
+                    other.sls.Join(instance.sls);
                     other.points.insert(other.points.end(), instance.points.begin(), instance.points.end());
                     other.maxX = std::max(other.maxX, instance.maxX);
                     // Move other to instance position (semantically keep 'instance' alive or swap)
@@ -1230,10 +1232,10 @@ TEST(StabbingLineRigorous, LargeRandomizedExists) {
     }
     
     // Sort and build
-    sls.build(points);
+    sls.Build(points);
     
-    EXPECT_TRUE(sls.hasStabbingLine());
-    auto line = sls.findStabbingLine();
+    EXPECT_TRUE(sls.HasStabbingLine());
+    auto line = sls.FindStabbingLine();
     ASSERT_TRUE(line.has_value());
     
     // Verify O(N)
@@ -1260,9 +1262,9 @@ TEST(StabbingLineRigorous, LargeRandomizedImpossible) {
         [](const Point_2& a, const Point_2& b) {
             return a.x() < b.x(); 
         });
-    sls.build(points);
+    sls.Build(points);
     
-    EXPECT_FALSE(sls.hasStabbingLine());
+    EXPECT_FALSE(sls.HasStabbingLine());
 }
 
 TEST(StabbingLineRigorous, LargeDynamicOutlier) {
@@ -1281,17 +1283,17 @@ TEST(StabbingLineRigorous, LargeDynamicOutlier) {
         points.emplace_back(x, y);
     }
     
-    sls.build(points);
-    EXPECT_TRUE(sls.hasStabbingLine());
+    sls.Build(points);
+    EXPECT_TRUE(sls.HasStabbingLine());
     
     // Add "Killer" outlier
     Point_2 killer(N/2.0, N*2.0); // Way off
-    sls.insert(killer);
+    sls.Insert(killer);
     
-    EXPECT_FALSE(sls.hasStabbingLine());
+    EXPECT_FALSE(sls.HasStabbingLine());
     
     // Remove killer
-    sls.remove(killer);
-    EXPECT_TRUE(sls.hasStabbingLine());
+    sls.Remove(killer);
+    EXPECT_TRUE(sls.HasStabbingLine());
 }
 

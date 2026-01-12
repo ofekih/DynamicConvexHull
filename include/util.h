@@ -1,47 +1,45 @@
-/**
- * @file util.h
- * @brief Utility types for the Dynamic Convex Hull structure.
- */
+// Copyright 2026 DynamicConvexHull Authors
+// SPDX-License-Identifier: MIT
 
-#ifndef DYNAMICCONVEXHULL_UTIL_H
-#define DYNAMICCONVEXHULL_UTIL_H
+/// @file util.h
+/// @brief Utility types for the Dynamic Convex Hull structure.
 
-#include <compare>
+#pragma once
+
 #include <array>
+#include <compare>
 
-/**
- * @brief Pair of bridges (upper and lower) stored at each internal node.
- * @tparam Traits Kernel providing Point_2, Segment_2, and comparators.
- */
-template<class Traits>
-struct Bridges{
-    using Compare = typename Traits::Compare_xy_2;
-    using Bridge = typename Traits::Segment_2;
+namespace dch {
 
-    static constexpr Compare compare = Compare();
+/// @brief Pair of bridges (upper and lower) stored at each internal node.
+/// @tparam Traits Kernel providing Point_2, Segment_2, and comparators.
+template <class Traits>
+struct Bridges {
+  using Compare = typename Traits::Compare_xy_2;
+  using Bridge = typename Traits::Segment_2;
 
-    std::array<Bridge, 2> data;
+  static constexpr Compare compare = Compare();
 
-    Bridges(Bridge x, Bridge y) : data({x, y}) {}
+  std::array<Bridge, 2> data;
 
-    Bridge& operator[](size_t idx) { return data[idx % 2]; }
-    const Bridge& operator[](size_t idx) const { return data[idx % 2]; }
+  Bridges(Bridge upper, Bridge lower) : data({upper, lower}) {}
 
-    bool operator==(const Bridges& b) const {
-        return compare(data[0][0], b[0][0]) == 0;
-    }
+  Bridge& operator[](std::size_t idx) { return data[idx % 2]; }
+  const Bridge& operator[](std::size_t idx) const { return data[idx % 2]; }
 
-    bool operator!=(const Bridges& b) const {
-        return !(*this == b);
-    }
+  bool operator==(const Bridges& other) const {
+    return compare(data[0][0], other[0][0]) == 0;
+  }
 
-    bool operator<(const Bridges& b) const {
-        return compare(data[0][0], b[0][0]) < 0;
-    }
+  bool operator!=(const Bridges& other) const { return !(*this == other); }
 
-    bool operator<=(const Bridges& b) const {
-        return compare(data[0][0], b[0][0]) <= 0;
-    }
+  bool operator<(const Bridges& other) const {
+    return compare(data[0][0], other[0][0]) < 0;
+  }
+
+  bool operator<=(const Bridges& other) const {
+    return compare(data[0][0], other[0][0]) <= 0;
+  }
 };
 
-#endif //DYNAMICCONVEXHULL_UTIL_H
+}  // namespace dch

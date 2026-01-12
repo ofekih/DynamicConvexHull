@@ -5,6 +5,8 @@
 #include <vector>
 #include <algorithm>
 
+using namespace dch;
+
 using K = Inexact_kernel<double>;
 using Point_2 = K::Point_2;
 
@@ -26,7 +28,7 @@ static void BM_Insert(benchmark::State& state) {
     for (auto _ : state) {
         CHTree<K> tree;
         for (const auto& p : points) {
-            tree.insert(p);
+            tree.Insert(p);
         }
         benchmark::ClobberMemory();
     }
@@ -48,7 +50,7 @@ static void BM_InsertSingle(benchmark::State& state) {
     
     CHTree<K> tree;
     for (const auto& p : points) {
-        tree.insert(p);
+        tree.Insert(p);
     }
     
     // Generate new points to insert
@@ -59,7 +61,7 @@ static void BM_InsertSingle(benchmark::State& state) {
     
     int idx = 0;
     for (auto _ : state) {
-        tree.insert(new_points[idx % new_points.size()]);
+        tree.Insert(new_points[idx % new_points.size()]);
         idx++;
     }
     state.SetComplexityN(n);
@@ -85,14 +87,14 @@ static void BM_Remove(benchmark::State& state) {
         state.PauseTiming();
         CHTree<K> tree;
         for (const auto& p : points) {
-            tree.insert(p);
+            tree.Insert(p);
         }
         std::vector<Point_2> to_remove = points;
         std::shuffle(to_remove.begin(), to_remove.end(), rng);
         state.ResumeTiming();
         
         for (const auto& p : to_remove) {
-            tree.remove(p);
+            tree.Remove(p);
         }
         benchmark::ClobberMemory();
     }
@@ -113,16 +115,16 @@ static void BM_RemoveSingle(benchmark::State& state) {
     
     CHTree<K> tree;
     for (int i = 0; i < n; i++) {
-        tree.insert(points[i]);
+        tree.Insert(points[i]);
     }
     
     int idx = n;
     for (auto _ : state) {
         // Remove a random existing point
         size_t remove_idx = rng() % n;
-        tree.remove(points[remove_idx]);
+        tree.Remove(points[remove_idx]);
         // Re-add a new point to maintain size
-        tree.insert(points[idx % points.size()]);
+        tree.Insert(points[idx % points.size()]);
         idx++;
     }
     state.SetComplexityN(n);
@@ -146,7 +148,7 @@ static void BM_Covers(benchmark::State& state) {
     
     CHTree<K> tree;
     for (const auto& p : points) {
-        tree.insert(p);
+        tree.Insert(p);
     }
     
     // Generate query points
@@ -157,7 +159,7 @@ static void BM_Covers(benchmark::State& state) {
     
     int idx = 0;
     for (auto _ : state) {
-        bool result = tree.covers(queries[idx % queries.size()]);
+        bool result = tree.Covers(queries[idx % queries.size()]);
         benchmark::DoNotOptimize(result);
         idx++;
     }
@@ -178,11 +180,11 @@ static void BM_UpperHullPoints(benchmark::State& state) {
     
     CHTree<K> tree;
     for (const auto& p : points) {
-        tree.insert(p);
+        tree.Insert(p);
     }
     
     for (auto _ : state) {
-        auto hull = tree.upperHullPoints();
+        auto hull = tree.UpperHullPoints();
         benchmark::DoNotOptimize(hull);
     }
     state.SetComplexityN(n);
@@ -206,21 +208,21 @@ static void BM_MixedOperations(benchmark::State& state) {
     
     CHTree<K> tree;
     for (const auto& p : points) {
-        tree.insert(p);
+        tree.Insert(p);
     }
     
     for (auto _ : state) {
         if (!points.empty() && action(rng) == 0) {
             // Remove
             size_t idx = rng() % points.size();
-            tree.remove(points[idx]);
+            tree.Remove(points[idx]);
             // O(1) removal from vector to avoid dominating the benchmark
             std::swap(points[idx], points.back());
             points.pop_back();
         } else {
             // Insert
             Point_2 p(dist(rng), dist(rng));
-            tree.insert(p);
+            tree.Insert(p);
             points.push_back(p);
         }
     }
@@ -254,7 +256,7 @@ static void BM_Build(benchmark::State& state) {
     
     for (auto _ : state) {
         CHTree<K> tree;
-        tree.build(points);
+        tree.Build(points);
         benchmark::ClobberMemory();
     }
     state.SetComplexityN(n);
@@ -269,7 +271,7 @@ static void BM_IncrementalInsert(benchmark::State& state) {
     for (auto _ : state) {
         CHTree<K> tree;
         for (const auto& p : points) {
-            tree.insert(p);
+            tree.Insert(p);
         }
         benchmark::ClobberMemory();
     }
@@ -284,7 +286,7 @@ static void BM_BuildLarge(benchmark::State& state) {
     
     for (auto _ : state) {
         CHTree<K> tree;
-        tree.build(points);
+        tree.Build(points);
         benchmark::ClobberMemory();
     }
     state.SetComplexityN(n);
@@ -298,7 +300,7 @@ static void BM_IncrementalInsertLarge(benchmark::State& state) {
     for (auto _ : state) {
         CHTree<K> tree;
         for (const auto& p : points) {
-            tree.insert(p);
+            tree.Insert(p);
         }
         benchmark::ClobberMemory();
     }
@@ -312,7 +314,7 @@ static void BM_InsertAfterBuild(benchmark::State& state) {
     auto points = generateSortedPoints(n, 42);
     
     CHTree<K> tree;
-    tree.build(points);
+    tree.Build(points);
     
     std::mt19937 rng(123);
     std::uniform_real_distribution<double> dist(-1000, 1000);
@@ -323,7 +325,7 @@ static void BM_InsertAfterBuild(benchmark::State& state) {
     
     int idx = 0;
     for (auto _ : state) {
-        tree.insert(new_points[idx % new_points.size()]);
+        tree.Insert(new_points[idx % new_points.size()]);
         idx++;
     }
     state.SetComplexityN(n);
@@ -336,7 +338,7 @@ static void BM_CoversAfterBuild(benchmark::State& state) {
     auto points = generateSortedPoints(n, 42);
     
     CHTree<K> tree;
-    tree.build(points);
+    tree.Build(points);
     
     std::mt19937 rng(123);
     std::uniform_real_distribution<double> dist(-1000, 1000);
@@ -347,7 +349,7 @@ static void BM_CoversAfterBuild(benchmark::State& state) {
     
     int idx = 0;
     for (auto _ : state) {
-        bool result = tree.covers(queries[idx % queries.size()]);
+        bool result = tree.Covers(queries[idx % queries.size()]);
         benchmark::DoNotOptimize(result);
         idx++;
     }
@@ -362,11 +364,11 @@ static void BM_Rebuild(benchmark::State& state) {
     auto points2 = generateSortedPoints(n, 123);
     
     CHTree<K> tree;
-    tree.build(points1);
+    tree.Build(points1);
     
     bool use_first = true;
     for (auto _ : state) {
-        tree.build(use_first ? points2 : points1);
+        tree.Build(use_first ? points2 : points1);
         use_first = !use_first;
         benchmark::ClobberMemory();
     }

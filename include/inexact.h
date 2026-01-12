@@ -1,131 +1,141 @@
-/**
- * @file inexact.h
- * @brief Inexact (floating-point) kernel for convex hull operations.
- * 
- * Provides a lightweight alternative to CGAL exact kernels for cases where
- * floating-point precision is acceptable. Uses C++20 std::partial_ordering.
- */
+// Copyright 2026 DynamicConvexHull Authors
+// SPDX-License-Identifier: MIT
 
-#ifndef DYNAMICCONVEXHULL_INEXACT_H
-#define DYNAMICCONVEXHULL_INEXACT_H
+/// @file inexact.h
+/// @brief Inexact (floating-point) kernel for convex hull operations.
+///
+/// Provides a lightweight alternative to CGAL exact kernels for cases where
+/// floating-point precision is acceptable. Uses C++20 std::partial_ordering.
+
+#pragma once
 
 #include <compare>
+#include <cstddef>
 
-/**
- * @brief Inexact geometric kernel using floating-point arithmetic.
- * @tparam T Numeric type (typically double).
- */
-template<typename T>
-class Inexact_kernel {
-public:
-    struct Point_2 {
-        T a, b;
+namespace dch {
 
-        Point_2() = default;
-        Point_2(T x, T y) : a(x), b(y) {}
+/// @brief Inexact geometric kernel using floating-point arithmetic.
+/// @tparam T Numeric type (typically double).
+template <typename T>
+class InexactKernel {
+ public:
+  struct Point_2 {
+    T x_;
+    T y_;
 
-        T x() const { return a; }
-        T y() const { return b; }
+    Point_2() = default;
+    Point_2(T x, T y) : x_(x), y_(y) {}
 
-        bool operator==(const Point_2& o) const {
-            return a == o.a && b == o.b;
-        }
-        
-        bool operator<(const Point_2& o) const {
-            if (a < o.a) return true;
-            return (a == o.a && b < o.b);
-        }
-        
-        bool operator<=(const Point_2& o) const {
-            if (a < o.a) return true;
-            return (a == o.a && b <= o.b);
-        }
-    };
+    [[nodiscard]] T x() const { return x_; }
+    [[nodiscard]] T y() const { return y_; }
 
-    struct Line_2 {
-        T slope, intercept;
+    bool operator==(const Point_2& other) const {
+      return x_ == other.x_ && y_ == other.y_;
+    }
 
-        T eval(T x) const {
-            return intercept + x * slope;
-        }
-    };
+    bool operator<(const Point_2& other) const {
+      if (x_ < other.x_) return true;
+      return (x_ == other.x_ && y_ < other.y_);
+    }
 
-    struct Segment_2 {
-        Point_2 a, b;
+    bool operator<=(const Point_2& other) const {
+      if (x_ < other.x_) return true;
+      return (x_ == other.x_ && y_ <= other.y_);
+    }
+  };
 
-        const Point_2& min() const { return a; }
-        const Point_2& max() const { return b; }
+  struct Line_2 {
+    T slope;
+    T intercept;
 
-        Segment_2() = default;
-        Segment_2(Point_2 a, Point_2 b) : a(a), b(b) {}
-        Segment_2(const Segment_2& s) : a(s.a), b(s.b) {}
+    [[nodiscard]] T Eval(T x) const { return intercept + x * slope; }
+  };
 
-        [[nodiscard]] bool is_vertical() const {
-            return a.a == b.a;
-        }
+  struct Segment_2 {
+    Point_2 source;
+    Point_2 target;
 
-        T slope() const {
-            return (b.b - a.b) / (b.a - a.a);
-        }
+    [[nodiscard]] const Point_2& min() const { return source; }
+    [[nodiscard]] const Point_2& max() const { return target; }
 
-        Line_2 supporting_line() const {
-            T s = slope();
-            return {s, a.b - s * a.a};
-        }
+    Segment_2() = default;
+    Segment_2(Point_2 a, Point_2 b) : source(a), target(b) {}
+    Segment_2(const Segment_2& s) = default;
 
-        bool operator==(const Segment_2& o) const {
-            return a == o.a && b == o.b;
-        }
-        
-        bool operator!=(const Segment_2& o) const {
-            return !(*this == o);
-        }
-        
-        Point_2& operator[](size_t idx) { return idx % 2 ? b : a; }
-        const Point_2& operator[](size_t idx) const { return idx % 2 ? b : a; }
-    };
+    [[nodiscard]] bool is_vertical() const { return source.x_ == target.x_; }
 
-    class Construct_midpoint_2 {
-    public:
-        Point_2 operator()(const Point_2& a, const Point_2& b) const {
-            return {(b.a - a.a) / 2. + a.a, (b.b - a.b) / 2. + a.b};
-        }
-        
-        Point_2 operator()(const Segment_2& s) const {
-            return this->operator()(s.a, s.b);
-        }
-    };
+    [[nodiscard]] T slope() const {
+      return (target.y_ - source.y_) / (target.x_ - source.x_);
+    }
 
-    class Compare_slope_2 {
-    public:
-        std::partial_ordering operator()(const Segment_2& l, const Segment_2& r) const {
-            T lslope = l.slope();
-            T rslope = r.slope();
-            return lslope <=> rslope;
-        }
-    };
+    [[nodiscard]] Line_2 supporting_line() const {
+      T s = slope();
+      return {s, source.y_ - s * source.x_};
+    }
 
-    class Compare_y_at_x_2 {
-    public:
-        std::partial_ordering operator()(const Point_2& x, const Line_2& l, const Line_2& r) const {
-            T lval = l.eval(x.a);
-            T rval = r.eval(x.a);
-            return lval <=> rval;
-        }
-        
-        std::partial_ordering operator()(const Point_2& p, const Line_2& l) const {
-            T val = l.eval(p.a);
-            return val <=> p.b;
-        }
-    };
+    bool operator==(const Segment_2& other) const {
+      return source == other.source && target == other.target;
+    }
 
-    class Compare_xy_2 {
-    public:
-        std::partial_ordering operator()(const Point_2& l, const Point_2& r) const {
-            if (auto cmp = l.a <=> r.a; cmp != 0) return cmp;
-            return l.b <=> r.b;
-        }
-    };
+    bool operator!=(const Segment_2& other) const { return !(*this == other); }
+
+    Point_2& operator[](std::size_t idx) { return idx % 2 ? target : source; }
+
+    const Point_2& operator[](std::size_t idx) const {
+      return idx % 2 ? target : source;
+    }
+  };
+
+  class Construct_midpoint_2 {
+   public:
+    [[nodiscard]] Point_2 operator()(const Point_2& a, const Point_2& b) const {
+      return {(b.x_ - a.x_) / 2.0 + a.x_, (b.y_ - a.y_) / 2.0 + a.y_};
+    }
+
+    [[nodiscard]] Point_2 operator()(const Segment_2& s) const {
+      return this->operator()(s.source, s.target);
+    }
+  };
+
+  class Compare_slope_2 {
+   public:
+    [[nodiscard]] std::partial_ordering operator()(const Segment_2& left,
+                                                   const Segment_2& right) const {
+      T left_slope = left.slope();
+      T right_slope = right.slope();
+      return left_slope <=> right_slope;
+    }
+  };
+
+  class Compare_y_at_x_2 {
+   public:
+    [[nodiscard]] std::partial_ordering operator()(const Point_2& point,
+                                                   const Line_2& left,
+                                                   const Line_2& right) const {
+      T left_val = left.Eval(point.x_);
+      T right_val = right.Eval(point.x_);
+      return left_val <=> right_val;
+    }
+
+    [[nodiscard]] std::partial_ordering operator()(const Point_2& point,
+                                                   const Line_2& line) const {
+      T val = line.Eval(point.x_);
+      return val <=> point.y_;
+    }
+  };
+
+  class Compare_xy_2 {
+   public:
+    [[nodiscard]] std::partial_ordering operator()(const Point_2& left,
+                                                   const Point_2& right) const {
+      if (auto cmp = left.x_ <=> right.x_; cmp != 0) return cmp;
+      return left.y_ <=> right.y_;
+    }
+  };
 };
 
-#endif //DYNAMICCONVEXHULL_INEXACT_H
+// Type alias for backward compatibility and convenience.
+template <typename T>
+using Inexact_kernel = InexactKernel<T>;
+
+}  // namespace dch

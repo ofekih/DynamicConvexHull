@@ -5,6 +5,8 @@
 #include "StabbingLineStructure.h"
 #include "inexact.h"
 
+using namespace dch;
+
 using K = Inexact_kernel<double>;
 using Point_2 = K::Point_2;
 typedef StabbingLineStructure<K> SLS;
@@ -32,10 +34,10 @@ static void BM_FindStabbingLine(benchmark::State& state) {
     auto points = generateNearLinePoints(n);
     
     SLS sls(0.5);
-    sls.build(points);
+    sls.Build(points);
     
     for (auto _ : state) {
-        auto line = sls.findStabbingLine();
+        auto line = sls.FindStabbingLine();
         benchmark::DoNotOptimize(line);
     }
     
@@ -52,10 +54,10 @@ static void BM_HasStabbingLine(benchmark::State& state) {
     auto points = generateNearLinePoints(n);
     
     SLS sls(0.5);
-    sls.build(points);
+    sls.Build(points);
     
     for (auto _ : state) {
-        bool has = sls.hasStabbingLine();
+        bool has = sls.HasStabbingLine();
         benchmark::DoNotOptimize(has);
     }
     
@@ -73,7 +75,7 @@ static void BM_Build(benchmark::State& state) {
     
     for (auto _ : state) {
         SLS sls(0.5);
-        sls.build(points);
+        sls.Build(points);
         benchmark::DoNotOptimize(sls);
     }
     
@@ -92,7 +94,7 @@ static void BM_InsertAmortized(benchmark::State& state) {
     for (auto _ : state) {
         SLS sls(0.5);
         for (const auto& p : points) {
-            sls.insert(p);
+            sls.Insert(p);
         }
         benchmark::DoNotOptimize(sls);
     }
@@ -112,10 +114,10 @@ static void BM_GetMinimumGap(benchmark::State& state) {
     auto points = generateNearLinePoints(n);
     
     SLS sls(0.5);
-    sls.build(points);
+    sls.Build(points);
     
     for (auto _ : state) {
-        double gap = sls.getMinimumGap();
+        double gap = sls.GetMinimumGap();
         benchmark::DoNotOptimize(gap);
     }
     
@@ -134,10 +136,10 @@ static void BM_Split(benchmark::State& state) {
     for (auto _ : state) {
         state.PauseTiming();
         SLS sls(0.5);
-        sls.build(points);
+        sls.Build(points);
         state.ResumeTiming();
         
-        auto right = sls.split(n * 0.05 / 2);  // Split at midpoint
+        auto right = sls.Split(n * 0.05 / 2);  // Split at midpoint
         benchmark::DoNotOptimize(right);
     }
     
@@ -155,17 +157,17 @@ static void BM_Join(benchmark::State& state) {
     
     // Build and split once to get two halves
     SLS original(0.5);
-    original.build(points);
+    original.Build(points);
     
     for (auto _ : state) {
         state.PauseTiming();
         SLS left(0.5);
-        left.build(std::vector<Point_2>(points.begin(), points.begin() + n/2));
+        left.Build(std::vector<Point_2>(points.begin(), points.begin() + n/2));
         SLS right(0.5);
-        right.build(std::vector<Point_2>(points.begin() + n/2, points.end()));
+        right.Build(std::vector<Point_2>(points.begin() + n/2, points.end()));
         state.ResumeTiming();
         
-        left.join(right);
+        left.Join(right);
         benchmark::DoNotOptimize(left);
     }
     

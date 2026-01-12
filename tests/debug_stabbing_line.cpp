@@ -12,6 +12,8 @@
 #include "StabbingLineStructure.h"
 #include "inexact.h"
 
+using namespace dch;
+
 using K = Inexact_kernel<double>;
 using Point_2 = K::Point_2;
 typedef StabbingLineStructure<K> SLS;
@@ -96,13 +98,13 @@ void testCase(const std::vector<Point_2>& points, double epsilon, const std::str
             if (a.x() != b.x()) return a.x() < b.x();
             return a.y() < b.y();
         });
-    sls.build(sorted);
+    sls.Build(sorted);
     
     // Debug info was removed during cleanup
     
     // Run algorithm
     std::cout << "\n--- Running findStabbingLine() ---" << std::endl;
-    auto algResult = sls.findStabbingLine();
+    auto algResult = sls.FindStabbingLine();
     
     // Run reference
     HalfPlaneIntersection ref(points, epsilon);
@@ -215,8 +217,8 @@ void findMinimalFailingCase() {
         
         // Quick check without debug
         SLS sls(epsilon);
-        sls.build(sorted);
-        auto algResult = sls.findStabbingLine();
+        sls.Build(sorted);
+        auto algResult = sls.FindStabbingLine();
         
         HalfPlaneIntersection ref(points, epsilon);
         auto refResult = ref.findLine();

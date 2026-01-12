@@ -5,6 +5,8 @@
 #include <vector>
 #include <algorithm>
 
+using namespace dch;
+
 using K = Inexact_kernel<double>;
 using Point_2 = K::Point_2;
 
@@ -35,17 +37,17 @@ static void BM_SplitJoin_PingPong(benchmark::State& state) {
     
     // Setup: Build the tree ONCE
     CHTree<K> tree;
-    tree.build(points);
+    tree.Build(points);
     
     for (auto _ : state) {
         // Op 1: Split
         // Returns a new tree with the right half. 'tree' keeps left half.
-        CHTree<K> rightHull = tree.split(splitX);
+        CHTree<K> rightHull = tree.Split(splitX);
         
         // Op 2: Join
         // Merges 'rightHull' back into 'tree'.
         // 'rightHull' becomes empty.
-        tree.join(rightHull);
+        tree.Join(rightHull);
         
         // Destruction of 'rightHull' happens here, but it's empty, so O(1).
     }
