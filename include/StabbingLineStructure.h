@@ -74,10 +74,19 @@ class StabbingLineStructure {
     if (point_count_ > 0) --point_count_;
   }
 
+  /// @brief Build from sorted points given by iterator range. O(n)
+  /// @tparam Iterator Iterator type that dereferences to Point.
+  /// @param begin Iterator to the first point.
+  /// @param end Iterator past the last point.
+  template <typename Iterator>
+  void Build(Iterator begin, Iterator end) {
+    hull_.Build(begin, end);
+    point_count_ = hull_.Size();
+  }
+
   /// @brief Build from sorted points. O(n)
   void Build(const std::vector<Point>& sorted_points) {
-    hull_.Build(sorted_points);
-    point_count_ = sorted_points.size();
+    Build(sorted_points.begin(), sorted_points.end());
   }
 
   /// @brief Split at x-coordinate. O(log² n)

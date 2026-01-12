@@ -371,21 +371,29 @@ class CHTree : public AVLTree<Bridges<Traits>> {
     return GetHullSlope<false>(x);
   }
 
-  /// @brief Build convex hull from sorted points in O(n) time.
-  /// @param sorted_points Points sorted by x-coordinate (and by y for ties).
-  void Build(const std::vector<Point>& sorted_points) {
+  /// @brief Build convex hull from sorted points given by iterator range in O(n) time.
+  /// @tparam Iterator Iterator type that dereferences to Point.
+  /// @param begin Iterator to the first point.
+  /// @param end Iterator past the last point.
+  template <typename Iterator>
+  void Build(Iterator begin, Iterator end) {
     AVLTree<Bridges<Traits>>::Clear();
-    if (sorted_points.empty()) {
+    if (begin == end) {
       return;
     }
 
     std::vector<Bridges<Traits>> bridges;
-    bridges.reserve(sorted_points.size());
-    for (const auto& p : sorted_points) {
-      bridges.push_back({Bridge(p, p), Bridge(p, p)});
+    for (auto it = begin; it != end; ++it) {
+      bridges.push_back({Bridge(*it, *it), Bridge(*it, *it)});
     }
 
     this->root_ = BuildSubtreeFast(bridges, 0, bridges.size());
+  }
+
+  /// @brief Build convex hull from sorted points in O(n) time.
+  /// @param sorted_points Points sorted by x-coordinate (and by y for ties).
+  void Build(const std::vector<Point>& sorted_points) {
+    Build(sorted_points.begin(), sorted_points.end());
   }
 
  private:
