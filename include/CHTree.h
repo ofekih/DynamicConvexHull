@@ -259,6 +259,32 @@ class CHTree : public AVLTree<Bridges<Traits>> {
     AVLTree<Bridges<Traits>>::Remove({Bridge(point, point), Bridge(point, point)});
   }
 
+  /// @brief Remove a point by x-coordinate. O(log² n)
+  /// @param x X-coordinate of the point to remove.
+  /// @note If no point with this x-coordinate exists, this is a no-op.
+  void Remove(double x) {
+    Node* current = this->root_;
+    if (!current) return;
+
+    // Navigate to the leaf with the matching x-coordinate
+    while (current && !this->IsLeaf(current)) {
+      double right_min_x = current->right->min[0].min().x();
+      if (x < right_min_x) {
+        current = current->left;
+      } else {
+        current = current->right;
+      }
+    }
+
+    if (!current) return;
+
+    // Check if we found a point with the matching x-coordinate
+    Point found = current->val[0].min();
+    if (std::abs(found.x() - x) < 1e-12) {
+      Remove(found);
+    }
+  }
+
   /// @brief Check if point is inside the convex hull. O(log n)
   [[nodiscard]] bool Covers(Point point) {
     return CoversImpl<false>(point) && CoversImpl<true>(point);

@@ -74,6 +74,17 @@ class StabbingLineStructure {
     if (point_count_ > 0) --point_count_;
   }
 
+  /// @brief Remove a point by x-coordinate. O(log² n)
+  /// @param x X-coordinate of the point to remove.
+  /// @note If no point with this x-coordinate exists, this is a no-op.
+  void Remove(double x) {
+    std::size_t old_size = hull_.Size();
+    hull_.Remove(x);
+    if (hull_.Size() < old_size) {
+      --point_count_;
+    }
+  }
+
   /// @brief Build from sorted points given by iterator range. O(n)
   /// @tparam Iterator Iterator type that dereferences to Point.
   /// @param begin Iterator to the first point.
