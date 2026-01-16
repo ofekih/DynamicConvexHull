@@ -310,6 +310,17 @@ class CHTree : public AVLTree<Bridges<Traits>> {
     return {this->root_->min[0].min().x(), this->root_->max[0].max().x()};
   }
 
+  /// @brief Get the y-coordinates at the boundary (leftmost and rightmost) points.
+  /// @return {first_y, last_y}. For empty hulls, returns {+inf, -inf}.
+  /// @note Time complexity: O(1)
+  [[nodiscard]] std::pair<double, double> GetBoundaryY() const {
+    if (!this->root_) {
+      return {std::numeric_limits<double>::infinity(),
+              -std::numeric_limits<double>::infinity()};
+    }
+    return {this->root_->min[0].min().y(), this->root_->max[0].max().y()};
+  }
+
   /// @brief Evaluate the hull y-value at given x-coordinate.
   /// @tparam kLower True for lower hull, false for upper hull.
   /// @param x X-coordinate within hull's x-range.

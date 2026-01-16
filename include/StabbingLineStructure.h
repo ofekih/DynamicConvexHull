@@ -241,6 +241,13 @@ class StabbingLineStructure {
     return hull_.GetXRange();
   }
 
+  /// @brief Get the y-coordinates at the boundary (leftmost and rightmost) points.
+  /// @return {first_y, last_y}. For empty structures, returns {+inf, -inf}.
+  /// @note Time complexity: O(1)
+  [[nodiscard]] std::pair<double, double> GetBoundaryY() const {
+    return hull_.GetBoundaryY();
+  }
+
  private:
   CHTree<Traits> hull_;  ///< Single hull storing original points
   double epsilon_;
