@@ -503,16 +503,19 @@ class CHTree : public AVLTree<Bridges<Traits>> {
   ///   - 'this' contains all points with x < split_x
   ///   - Returns a new CHTree containing points with x >= split_x
   ///
+  /// @tparam XType Type of the x-coordinate (double, int64_t, uint64_t, etc.)
   /// @param split_x X-coordinate to split at.
   /// @return New CHTree containing the right portion.
   /// @note Time complexity: O(log² N)
-  [[nodiscard]] CHTree Split(double split_x) {
+  template <typename XType>
+  [[nodiscard]] CHTree Split(XType split_x) {
     CHTree right_hull;
     if (this->root_ == nullptr) {
       return right_hull;
     }
 
-    Point split_point(split_x, std::numeric_limits<double>::lowest());
+    // Use the Point type from Traits, construct with lowest possible y
+    Point split_point(split_x, std::numeric_limits<decltype(split_x)>::lowest());
     Bridges<Traits> split_key = {Bridge(split_point, split_point),
                                   Bridge(split_point, split_point)};
 

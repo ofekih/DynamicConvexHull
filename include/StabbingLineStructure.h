@@ -101,7 +101,9 @@ class StabbingLineStructure {
   }
 
   /// @brief Split at x-coordinate. O(log² n)
-  [[nodiscard]] StabbingLineStructure Split(double split_x) {
+  /// @tparam XType Type of the x-coordinate (double, int64_t, uint64_t, etc.)
+  template <typename XType>
+  [[nodiscard]] StabbingLineStructure Split(XType split_x) {
     StabbingLineStructure right(epsilon_);
     auto hull_right = hull_.Split(split_x);
     right.hull_ = std::move(hull_right);
