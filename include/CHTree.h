@@ -280,7 +280,7 @@ class CHTree : public AVLTree<Bridges<Traits>> {
 
     // Check if we found a point with the matching x-coordinate
     Point found = current->val[0].min();
-    if (std::abs(found.x() - x) < 1e-12) {
+    if (Traits::CoordEqual(found.x(), x)) {
       Remove(found);
     }
   }
@@ -343,8 +343,8 @@ class CHTree : public AVLTree<Bridges<Traits>> {
         if (bridge.is_vertical()) {
           return kLower ? bridge.min().y() : bridge.max().y();
         }
+        if (Traits::CoordEqual(min_x, max_x)) return bridge.min().y();
         double dx = max_x - min_x;
-        if (std::abs(dx) < 1e-15) return bridge.min().y();
         double dy = bridge.max().y() - bridge.min().y();
         double slope = dy / dx;
         return bridge.min().y() + slope * (x - min_x);
@@ -379,8 +379,8 @@ class CHTree : public AVLTree<Bridges<Traits>> {
           return kLower ? -std::numeric_limits<double>::infinity()
                         : std::numeric_limits<double>::infinity();
         }
+        if (Traits::CoordEqual(min_x, max_x)) return 0.0;
         double dx = max_x - min_x;
-        if (std::abs(dx) < 1e-15) return 0.0;
         double dy = bridge.max().y() - bridge.min().y();
         return dy / dx;
       } else if (x < min_x) {
@@ -584,7 +584,7 @@ class CHTree : public AVLTree<Bridges<Traits>> {
                             : -std::numeric_limits<double>::infinity();
       } else {
         double dx = bridge.max().x() - bridge.min().x();
-        if (std::abs(dx) < 1e-15) {
+        if (Traits::CoordEqual(bridge.min().x(), bridge.max().x())) {
           this_slope = 0.0;
         } else {
           this_slope = (bridge.max().y() - bridge.min().y()) / dx;
@@ -660,16 +660,16 @@ class CHTree : public AVLTree<Bridges<Traits>> {
       double bridge_slope = 0.0;
       if (!bridge.is_vertical()) {
         double dx = max_x - min_x;
-        if (std::abs(dx) >= 1e-15) {
+        if (!Traits::CoordEqual(min_x, max_x)) {
           bridge_slope = (bridge.max().y() - bridge.min().y()) / dx;
         }
       }
 
-      if (std::abs(x - min_x) < 1e-12) {
+      if (Traits::CoordEqual(x, min_x)) {
         right_slope = bridge_slope;
         found_exact_vertex = true;
         current = current->left;
-      } else if (std::abs(x - max_x) < 1e-12) {
+      } else if (Traits::CoordEqual(x, max_x)) {
         left_slope = bridge_slope;
         found_exact_vertex = true;
         current = current->right;

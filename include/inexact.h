@@ -133,6 +133,11 @@ class InexactKernel {
       return left.y_ <=> right.y_;
     }
   };
+
+  /// @brief Compare coordinates for equality (with epsilon for floats)
+  static bool CoordEqual(T a, T b) {
+    return std::abs(a - b) < static_cast<T>(1e-12);
+  }
 };
 
 // Type alias for backward compatibility and convenience.
@@ -276,6 +281,11 @@ class IntegerKernel {
       return left.y_ <=> right.y_;
     }
   };
+
+  /// @brief Compare coordinates for equality (exact for integers)
+  static bool CoordEqual(IntType a, IntType b) {
+    return a == b;
+  }
 };
 
 }  // namespace dch
