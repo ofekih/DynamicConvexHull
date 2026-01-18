@@ -19,6 +19,7 @@ namespace dch {
 template <typename T>
 class InexactKernel {
  public:
+  using CoordinateType = T;
   struct Point_2 {
     T x_;
     T y_;
@@ -148,6 +149,7 @@ using Inexact_kernel = InexactKernel<T>;
 template <typename IntType, typename FloatType = double>
 class IntegerKernel {
  public:
+  using CoordinateType = IntType;
   struct Point_2 {
     IntType x_;
     IntType y_;

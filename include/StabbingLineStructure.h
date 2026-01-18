@@ -133,7 +133,7 @@ class StabbingLineStructure {
       return Line(0.0, 0.0);
     }
 
-    if (std::abs(max_x - min_x) < 1e-12) {
+    if (static_cast<double>(max_x - min_x) < 1e-12) {
       // Single x-coordinate: ceiling = lower hull + epsilon,
       //                      floor = upper hull - epsilon
       double y_ceil = hull_.EvaluateLowerHullAt(min_x) + epsilon_;
@@ -239,7 +239,7 @@ class StabbingLineStructure {
     return gap;
   }
 
-  [[nodiscard]] std::pair<double, double> GetXRange() const {
+  [[nodiscard]] std::pair<typename Traits::CoordinateType, typename Traits::CoordinateType> GetXRange() const {
     return hull_.GetXRange();
   }
 

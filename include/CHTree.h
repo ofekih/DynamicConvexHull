@@ -301,11 +301,12 @@ class CHTree : public AVLTree<Bridges<Traits>> {
   }
 
   /// @brief Get the x-coordinate range of all points.
-  /// @return {min_x, max_x}. For empty hulls, returns {+inf, -inf}.
-  [[nodiscard]] std::pair<double, double> GetXRange() const {
+  /// @return {min_x, max_x}. For empty hulls, returns {max, lowest}.
+  [[nodiscard]] std::pair<typename Traits::CoordinateType, typename Traits::CoordinateType> GetXRange() const {
+    using T = typename Traits::CoordinateType;
     if (!this->root_) {
-      return {std::numeric_limits<double>::infinity(),
-              -std::numeric_limits<double>::infinity()};
+      return {std::numeric_limits<T>::max(),
+              std::numeric_limits<T>::lowest()};
     }
     return {this->root_->min[0].min().x(), this->root_->max[0].max().x()};
   }
